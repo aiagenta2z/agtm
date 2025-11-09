@@ -141,5 +141,3 @@ Retrieving specific agent with unique ID: AI-Hub-Admin/My-First-AI-Coding-Agent
 {'total_hits': 1, 'id': 'AI-Hub-Admin/My-First-AI-Coding-Agent', 'items': [{'content_name': 'My-First-AI-Coding-Agent', 'publisher_id': 'pub-ai-hub-admin', 'detail_url': 'https://www.deepnlp.org/store/ai-agent/ai-agent/pub-ai-hub-admin/my-first-ai-coding-agent', 'website': 'https://github.com/AI-Hub-Admin/My-First-AI-Coding-Agent', 'github': 'https://github.com/AI-Hub-Admin/My-First-AI-Coding-Agent', 'review_cnt': '0', 'rating': '0.0', 'description': '# My-First-AI-Coding-Agent\nAI Agent Registry Demo project\n\n', 'subfield': 'AI AGENT', 'field': 'AI AGENT', 'id': 'ai-hub-admin/my-first-ai-coding-agent', 'content_tag_list': 'GitHub 0', 'thumbnail_picture': 'https://avatars.githubusercontent.com/u/184629057?v=4'}]}
 ```
 
-
-

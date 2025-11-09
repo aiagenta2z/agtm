@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    // IMPORTANT: Use modern module system
+//    "module": "NodeNext",
+//    "moduleResolution": "NodeNext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+
+    // Set target Node.js version
+    "target": "es2020",
+    
+    // Standard TypeScript features
+    "esModuleInterop": true,
+    "strict": true,
+    
+    // Output directory (where compiled JS goes)
+    "outDir": "./dist"
+  },
+  "ts-node": {
+    // Tells ts-node to use the module system set above
+    // "esm": true
+  },
+  "include": ["agtm-cli.ts"]
+}
