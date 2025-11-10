@@ -1,7 +1,7 @@
 
 ### agtm: Command Line CLI Tool for AI Agent Registry in the Open Source AI Agent Marketplace
 
-[GitHub](https://github.com/aiagenta2z/agtm)|[AI Agent Marketplace CLI Doc](https://www.deepnlp.org/doc/ai_agent_marketplace)|[DeepNLP AI Agent Marketplace](https://www.deepnlp.org/store/ai-agent) | [OneKey Agent Router](https://www.deepnlp.org/agent/onekey-mcp-router) | [Agent MCP OneKey Router Ranking](https://www.deepnlp.org/agent/rankings)
+[GitHub](https://github.com/aiagenta2z/agtm)|[AI Agent Marketplace CLI Doc](https://www.deepnlp.org/doc/ai_agent_marketplace)|[DeepNLP AI Agent Marketplace](https://www.deepnlp.org/store/ai-agent) | [OneKey Agent Router](https://www.deepnlp.org/agent/onekey-mcp-router) | [Agent MCP OneKey Router Ranking](https://www.deepnlp.org/agent/rankings) | [NodeJS agtm](https://www.npmjs.com/package/@aiagenta2z/agtm)
 
 
 The command line `agtm --upload` , `agtm --search` helps users to register and publish their AI Agents meta api information from agent.json/agent.yaml file
@@ -11,7 +11,8 @@ or a github repo URL in a few seconds.
 To use the command line, you need to first install the package either using python or node environment
 
 
-####  Install and Use `agtm` CLI
+##  Install and Use `agtm` CLI
+
 Python
 ``` Python
 pip install ai-agent-marketplace
@@ -30,7 +31,7 @@ Command line to register your AI agent from GitHub, Local config(agent.json, age
 To see detailed usage, visit the GitHub of `agtm` at Documentation (https://github.com/aiagenta2z/ai-agent-marketplace)
 
 
-#### Tutorial 
+## Tutorial 
 
 Let's say you have create a repo of your open source AI Agent (e.g. https://github.com/AI-Hub-Admin/My-First-AI-Coding-Agent), And you want to 
 register and get a registered detailed page of AI Agent in the marketplace and monitor the traffic.
