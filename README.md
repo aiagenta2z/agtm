@@ -11,7 +11,7 @@ To use the command line, you need to first install the package either using pyth
 
 
 
-####  Install and Use `agtm` CLI
+##  Install and Use `agtm` CLI
 Python
 ``` Python
 pip install ai-agent-marketplace
@@ -30,7 +30,7 @@ Command line to register your AI agent from GitHub, Local config(agent.json, age
 To see detailed usage, visit the GitHub of `agtm` at Documentation (https://github.com/aiagenta2z/ai-agent-marketplace)
 
 
-#### Tutorial 
+## Tutorial 
 
 Let's say you have create a repo of your open source AI Agent (e.g. https://github.com/AI-Hub-Admin/My-First-AI-Coding-Agent), And you want to 
 register and get a registered detailed page of AI Agent in the marketplace and monitor the traffic.
@@ -73,7 +73,7 @@ agtm upload --config ./agent.yaml --endpoint https://www.example.com
 ```
 
 
-You can download sample [agent.json](https://github.com/aiagenta2z/agtm/agent.json) or [agent.yaml](https://github.com/aiagenta2z/agtm/agent.yaml) file from github https://github.com/aiagenta2z/agtm
+You can download sample [agent.json](https://github.com/aiagenta2z/agtm/blob/main/agent.json) or [agent.yaml](https://github.com/aiagenta2z/agtm/blob/main/agent.yaml) file from github https://github.com/aiagenta2z/agtm
 See the explanation of the schema, please visit the [documentation](https://www.deepnlp.org/doc/ai_agent_marketplace).
 
 
@@ -140,4 +140,11 @@ Retrieving specific agent with unique ID: AI-Hub-Admin/My-First-AI-Coding-Agent
 
 {'total_hits': 1, 'id': 'AI-Hub-Admin/My-First-AI-Coding-Agent', 'items': [{'content_name': 'My-First-AI-Coding-Agent', 'publisher_id': 'pub-ai-hub-admin', 'detail_url': 'https://www.deepnlp.org/store/ai-agent/ai-agent/pub-ai-hub-admin/my-first-ai-coding-agent', 'website': 'https://github.com/AI-Hub-Admin/My-First-AI-Coding-Agent', 'github': 'https://github.com/AI-Hub-Admin/My-First-AI-Coding-Agent', 'review_cnt': '0', 'rating': '0.0', 'description': '# My-First-AI-Coding-Agent\nAI Agent Registry Demo project\n\n', 'subfield': 'AI AGENT', 'field': 'AI AGENT', 'id': 'ai-hub-admin/my-first-ai-coding-agent', 'content_tag_list': 'GitHub 0', 'thumbnail_picture': 'https://avatars.githubusercontent.com/u/184629057?v=4'}]}
 ```
+
+
+
+## Schema
+
+
+
 
