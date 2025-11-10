@@ -57,32 +57,85 @@ function loadConfigFile(filePath: string): Record<string, any> {
 }
 
 
+/**
+ * Fills a dictionary (JavaScript Object) with values from a source object based on 
+ * a list of required and optional keys.
+ */
+function fillItemInfoDict(
+        file_content: Record<string, any>, 
+        required_keys: string[], 
+        optional_keys: string[]
+    ): Record<string, any> {
+    
+    const item_info: Record<string, any> = {};
+
+    // 1. Process Required Keys
+    if (required_keys && Array.isArray(required_keys)) {
+        for (const key of required_keys) {
+            if (file_content[key] === undefined || file_content[key] === null) {
+                // If a required key is missing or explicitly null/undefined, throw an error.
+                throw new Error(`❌ Error: Required key '${key}' is missing or empty in the file content.`);
+            }
+            // Add the key-value pair to the result dictionary
+            item_info[key] = file_content[key];
+        }
+    }
+
+    // 2. Process Optional Keys
+    if (optional_keys && Array.isArray(optional_keys)) {
+        for (const key of optional_keys) {
+            // Check if the key exists in the file_content AND hasn't already been added as a required key
+            // (The second part is mostly for efficiency, but also good practice)
+            if (file_content[key] !== undefined && required_keys.indexOf(key) === -1) {
+                // Add the optional key-value pair if it exists
+                item_info[key] = file_content[key];
+            }
+        }
+    }
+
+    return item_info;
+}
+
 // --- Command Handlers ---
+
+const default_required_keys = ["name", "content"];
+const default_optional_keys = [
+    "website", "field", "subfield", "content_tag_list", "github", "price_type", 
+    "api", "thumbnail_picture",  "upload_image_files", "sdk", "package"];
 
 /**
  * Handles the 'agtm upload' command.
  */
-async function handleUpload(options: { github?: string, config?: string, endpoint?: string }) {
+async function handleUpload(options: { github?: string, config?: string, endpoint?: string, schema?: string }) {
     const access_key = getAccessKey();
     let item_info: Record<string, any> = {};
 
+    // 1.0 set endpoint 
+    const url = options.endpoint || REGISTRY_ENDPOINT;
+
+    // 2.0 schema
+    var required_keys = [];
+    var optional_keys = [];
+    if (options.schema && options.schema != "") {
+        const schemaConfig = loadConfigFile(options.schema);
+        required_keys = schemaConfig.required;
+        optional_keys = schemaConfig.optional;
+    } else {
+        required_keys = default_required_keys;
+        optional_keys = default_optional_keys;
+    }
+    
     // set default registry endpoint and then change according to github/other configs
-    var internal_endpoint = REGISTRY_ENDPOINT;
     if (options.github) {
         console.log(`\nAttempting to register agent from GitHub: ${options.github}`);
         item_info.github = options.github;
-        internal_endpoint = REGISTRY_ENDPOINT;
     } else if (options.config) {
+
         console.log(`\nAttempting to register agent from config file: ${options.config}`);
         const file_content = loadConfigFile(options.config);
         
         // Basic validation for config upload
-        if (!file_content.name || !file_content.content) {
-            console.error("❌ Error: Config file must contain 'name' and 'content' fields.");
-            process.exit(1);
-        }
-        item_info = file_content;
-        internal_endpoint = REGISTRY_ENDPOINT_v1;
+        item_info = fillItemInfoDict(file_content, required_keys, optional_keys);
     } else {
         // Should be handled by commander's required option check, but kept as safeguard.
         console.error("❌ Error: 'upload' command requires either --github or --config.");
@@ -92,7 +145,6 @@ async function handleUpload(options: { github?: string, config?: string, endpoin
     // decide endpoint
     // if github mode, set to REGISTRY_ENDPOINT, otherwise if config mode set to REGISTRY_ENDPOINT_v1
     // if endpoint set externally, has higher priority.
-    const url = options.endpoint || internal_endpoint;
     // console.log(`DEBUG: options.endpoint ${options.endpoint}`);
     // console.log(`DEBUG: internal_endpoint ${internal_endpoint}`);
     // console.log(`DEBUG: final url ${url}`);
@@ -100,6 +152,7 @@ async function handleUpload(options: { github?: string, config?: string, endpoin
     const payload = { ...item_info, access_key };
 
     console.log(`Submitting agent information to endpoint: ${url}`);
+    console.log(`Submitting agent information to payload: ${JSON.stringify(item_info)}`);
     
     try {
         const response = await axios.post(url, payload, {
@@ -176,7 +229,7 @@ const program = new Command();
 program
     .name('agtm')
     .description('An Open Source Command-line Tool for AI Agents meta registry, AI Agents Marketplace Management, AI Agents Search and AI Agents Index Services. Help users to explore interesting AI Agents. Documentation: https://www.deepnlp.org/doc/ai_agent_marketplace, Marketplace: https://www.deepnlp.org/store/ai-agent')
-    .version('1.0.0');
+    .version('1.0.4');
 
 // 1. UPLOAD Command
 const uploadCommand = program.command('upload')
@@ -185,10 +238,11 @@ const uploadCommand = program.command('upload')
 
 // Mutually Exclusive Group (managed with custom logic and checks)
 uploadCommand.option('--github <url>', 'The GitHub repository URL for the open-sourced agent.');
-uploadCommand.option('--config <path>', 'Path to a .json or .yaml file containing the agent\'s meta information.');
-
-// Custom check for the required mutual exclusion
+uploadCommand.option('--config <path>', 'Path to a .json or .yaml, agent.json file containing the agent\'s meta information.');
 uploadCommand.option('--endpoint <url>', 'The endpoint URL to post data to (overrides default).', "");
+uploadCommand.option('--schema <path>', 'Path to a .json or .yaml, schema.json file containing the agent\'s meta information.', "");
+
+
 uploadCommand.hook('preAction', (thisCommand) => {
     const options = thisCommand.opts();
     if (!options.github && !options.config) {

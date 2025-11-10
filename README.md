@@ -1,3 +1,4 @@
+
 ### agtm: Command Line CLI Tool for AI Agent Registry in the Open Source AI Agent Marketplace
 
 [GitHub](https://github.com/aiagenta2z/agtm)|[AI Agent Marketplace CLI Doc](https://www.deepnlp.org/doc/ai_agent_marketplace)|[DeepNLP AI Agent Marketplace](https://www.deepnlp.org/store/ai-agent) | [OneKey Agent Router](https://www.deepnlp.org/agent/onekey-mcp-router) | [Agent MCP OneKey Router Ranking](https://www.deepnlp.org/agent/rankings)
@@ -8,7 +9,6 @@ or a github repo URL in a few seconds.
 
 'agtm' means 'ai agent marketplace' or 'ai agent manager'
 To use the command line, you need to first install the package either using python or node environment
-
 
 
 ####  Install and Use `agtm` CLI
@@ -44,6 +44,12 @@ Register your AI Agent Marketplace Access Key here (https://deepnlp.org/workspac
 export AI_AGENT_MARKETPLACE_ACCESS_KEY="{your_access_key}"
 ```
 
+You can also use the test key for validation, which is associated with a test-only account on deepnlp.org and aiagenta2z.com. 
+
+```
+export AI_AGENT_MARKETPLACE_ACCESS_KEY="TEST_KEY_AI_AGENT_REGISTRY"
+```
+
 **2. Registry AI Agent from your GitHub**
 
 The default registry provider endpoint includes: [DeepNLP AI Agent Registry Endpoint](https://www.deepnlp.org/api/ai_agent_marketplace/registry) | 
@@ -65,15 +71,9 @@ agtm upload --github https://github.com/AI-Hub-Admin/My-First-AI-Coding-Agent
 ## Register from local config of AI Agent meta
 agtm upload --config ./agent.json
 agtm upload --config ./agent.yaml
-
-
-## Submit to your customized endpoint 
-
-agtm upload --config ./agent.yaml --endpoint https://www.example.com
 ```
 
-
-You can download sample [agent.json](https://github.com/aiagenta2z/agtm/agent.json) or [agent.yaml](https://github.com/aiagenta2z/agtm/agent.yaml) file from github https://github.com/aiagenta2z/agtm
+You can download sample [agent.json](https://github.com/aiagenta2z/agtm/blob/main/agent.json) or [agent.yaml](https://github.com/aiagenta2z/agtm/blob/main/agent.yaml) file from github https://github.com/aiagenta2z/agtm
 See the explanation of the schema, please visit the [documentation](https://www.deepnlp.org/doc/ai_agent_marketplace).
 
 
@@ -116,7 +116,91 @@ price_subscription: "Basic: your basic plan introduction, Advanced: Your Advance
 
 ```
 
-**4. Search AI Agent Marketplace**
+**4. Use your customized endpoint and schema definition**
+
+You have the flexibility to use the AI Agent marketplace/manager cli `agtm` to submit customized ai agent schema to your customized endpoint.
+
+You need to define a customized `schema.json` (https://github.com/aiagenta2z/agtm/blob/main/schema.json) file similar to the default one below and your URL of `endpoint`.
+Then the package will POST the the data schema to your endpoint. 
+
+
+Note: the keys in agent.json and schema.json should match. Package will select keys from the agent.json/agent.yaml files.
+
+
+`schema.json` should have two keys defined the required fields and optional fields you want to submit from the agent.json file. 
+
+Remember to keep the `access_key` in safe place, the post request will post the `access_key` as well as schema to the endpoint. 
+
+## default schema.json definition
+```
+{
+    "required": [
+        "name",
+        "content"
+    ],
+    "optional": [
+        "website", 
+        "field", 
+        "subfield", 
+        "content_tag_list", 
+        "github", 
+        "price_type", 
+        "api", 
+        "thumbnail_picture", 
+        "upload_image_files",
+        "sdk",
+        "package"
+    ]
+}
+```
+
+
+Please visit the command line github package [agtm](https://github.com/aiagenta2z/agtm) and [DOC](https://www.deepnlp.org/doc/ai_agent_marketplace) detailed usage.
+
+
+Use the test account and access 
+
+```
+export AI_AGENT_MARKETPLACE_ACCESS_KEY="TEST_KEY_AI_AGENT_REGISTRY"
+
+agtm upload --config ./agent.json --endpoint https://www.deepnlp.org/api/ai_agent_marketplace/registry --schema ./schema.json
+
+agtm upload --config ./agent.json --endpoint https://www.aiagenta2z.com/api/ai_agent_marketplace/registry --schema ./schema.json
+```
+
+
+```
+Setting Registry Endpoint to URL: https://www.deepnlp.org/api/ai_agent_marketplace/registry
+Customized Schema is enabled : ./schema.json
+Attempting to register agent from config file: ./agent.json
+✅ Loaded custom schema from: ./schema.json
+Using customized schema {"required": ["name", "content"], "optional": ["website", "field", "subfield", "content_tag_list", "github", "price_type", "api", "thumbnail_picture", "upload_image_files", "sdk", "package"]}
+WARN: Calling AddServiceAPI input param optional keys filled fields ['website', 'field', 'subfield', 'content_tag_list', 'github', 'price_type', 'api', 'thumbnail_picture', 'upload_image_files']|missing_fields []
+Submitting agent information to the marketplace...
+
+✅ Registration Successful!
+   URL: https://www.deepnlp.org/store/ai-agent/coding-agent/pub-test-agtm-registry/my-first-ai-coding-agent
+   Message: Content Updated Successfully|Visit URL at https://www.deepnlp.org/store/ai-agent/coding-agent/pub-test-agtm-registry/my-first-ai-coding-agent and Login to View the Pending status webpage...
+   Track its status at: https://www.deepnlp.org/store/ai-agent/coding-agent/pub-test-agtm-registry/my-first-ai-coding-agent
+```
+
+
+Use www.example.com as endpoint example 
+
+
+```
+agtm upload --config ./agent.json --endpoint https://www.example.com --schema ./schema.json
+
+```
+
+It will return an error message showing the endpoint and data, https://www.example.com doesn't have endpoint handling
+
+```
+❌ Registration Failed. Please check your endpoint https://www.example.com  and agent data {'name': 'My First AI Coding Agent', 'content': 'This AI Agent can do complicated programming work for humans', 'website': 'https://www.my_first_agent.com', 'field': 'AI AGENT', 'subfield': 'Coding Agent', 'content_tag_list': 'coding,python', 'github': '', 'thumbnail_picture': 'https://avatars.githubusercontent.com/u/242328252?s=200&v=4', 'upload_image_files': '', 'api': 'https://www.my_first_agent.com/agent', 'price_type': 'FREE', 'price_per_call_credit': 0.0, 'price_fixed_credit': 0.0, 'price_subscription': 'Basic: your basic plan introduction, Advanced: Your Advanced Plan introduction, etc.'}
+```
+
+
+**5. Search AI Agent Marketplace**
 
 ```
 

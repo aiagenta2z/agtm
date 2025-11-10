@@ -3,4 +3,7 @@
 /dist
 /node_modules
 test_run_package.sh
-
+package-lock.json
+python/
+release/
+schema.json

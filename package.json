@@ -1,6 +1,6 @@
 {
   "name": "@aiagenta2z/agtm",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "description": "agtm: Open Source CLI for AI Agent Marketplace Registration, AI Agents Management, AI Agents Index and Search",
   "main": "dist/agtm-cli.js",
   "type": "module",
@@ -14,7 +14,8 @@
     "dist",
     "README.md",
     "agent.json",
-    "agent.yaml"
+    "agent.yaml",
+    "schema.json"
   ],
   "author": "deepnlp",
   "license": "ISC",
@@ -31,6 +32,7 @@
   },
   "repository": {
     "type": "git",
-    "url": ""
-  }
+    "url": "https://github.com/aiagenta2z/agtm"
+  },
+  "homepage": "https://www.deepnlp.org/store/ai-agent"
 }

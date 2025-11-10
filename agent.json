@@ -5,12 +5,13 @@
     "field": "AI AGENT",
     "subfield": "Coding Agent",
     "content_tag_list": "coding,python",
-    "github": "",
+    "github": "https://github.com/AI-Hub-Admin/My-First-AI-Coding-Agent",
     "thumbnail_picture": "https://avatars.githubusercontent.com/u/242328252?s=200&v=4",
     "upload_image_files": "",
     "api": "https://www.my_first_agent.com/agent",
     "price_type": "PER_CALL",
     "price_per_call_credit": 0.0,
     "price_fixed_credit" : 0.0,
-    "price_subscription": "Basic: your basic plan introduction, Advanced: Your Advanced Plan introduction, etc."
+    "price_subscription": "Basic: your basic plan introduction, Advanced: Your Advanced Plan introduction, etc.",
+    "new_key_1": "new_value_1"
 }
