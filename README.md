@@ -10,6 +10,8 @@ or a github repo URL in a few seconds.
 'agtm' means 'ai agent marketplace' or 'ai agent manager'
 To use the command line, you need to first install the package either using python or node environment
 
+<img width="2618" height="388" alt="image" src="https://github.com/user-attachments/assets/3708c9ad-27c4-4173-a298-4b1486f6c612" />
+
 
 ##  Install and Use `agtm` CLI
 
