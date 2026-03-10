@@ -4,42 +4,83 @@
 [GitHub](https://github.com/aiagenta2z/agtm)|[AI Agent Marketplace CLI Doc](https://www.deepnlp.org/doc/ai_agent_marketplace)|[DeepNLP AI Agent Marketplace](https://www.deepnlp.org/store/ai-agent) | [OneKey Agent Router](https://www.deepnlp.org/agent/onekey-mcp-router) | [Agent MCP OneKey Router Ranking](https://www.deepnlp.org/agent/rankings) | [NodeJS agtm](https://www.npmjs.com/package/@aiagenta2z/agtm)
 
 
-The command line `agtm --upload` , `agtm --search` helps users to register and publish their AI Agents meta api information from agent.json/agent.yaml file
+The command line `agtm upload` , `agtm search`,  `agtm add` helps users to register and publish their AI Agents meta api information from agent.json/agent.yaml file
 or a github repo URL in a few seconds.
 
-'agtm' means 'ai agent marketplace' or 'ai agent manager'
+'agtm' means 'ai agent marketplace' or 'ai agent manager', you can use this command line to manage agent meta, skills add,installation, etc.
 To use the command line, you need to first install the package either using python or node environment
 
+## Quickstart
 
-##  Install and Use `agtm` CLI
+Agtm CLI Options
 
-Python
-``` Python
-pip install ai-agent-marketplace
+### `search`
+`agtm search` helps to search AI Agent MCP and skills marketplace by id or query keywords.
+
+Example Usage
+```shell
+agtm search --q 'coding agent'
+agtm search --id 'google-maps/google-maps'
 ```
 
-Node
-``` NodeJS
-npm install -g @aiagenta2z/agtm
+### `upload`
+`agtm update` helps to update your local agent.json or agent.yaml meta information to DeepNLP AI Agent Marketplace Index.
+Example Usage
+```shell
+agtm upload --github https://github.com/AI-Hub-Admin/My-First-AI-Coding-Agent
+agtm upload --config ./agent.json
+agtm upload --config ./agent.yaml
 ```
 
+### `add`
+`agtm add` Install Skills from Github
 
-note: run nodejs environment, you need to add -g to install, so you can just run command line `agtm` without the `npx agtm` prefix,
 
+Example Usage
+```shell
+npx agtm add https://github.com/aiagenta2z/onekey-agent-router  ## add all onekey router skills
+npx agtm add aiagenta2z/onekey-agent-router --skill google-maps -g  ## install to global path
+npx agtm add aiagenta2z/onekey-agent-router --skill google-maps     ## install to your project folder
+npx agtm add https://github.com/aiagenta2z/onekey-agent-router --skill google-maps  ## install one skill
+```
 
-Command line to register your AI agent from GitHub, Local config(agent.json, agent.yaml) or search the AI agent marketplace.
-To see detailed usage, visit the GitHub of `agtm` at Documentation (https://github.com/aiagenta2z/ai-agent-marketplace)
+Expected Results install google-maps
+```shell
+Installed skill 'google-maps' to antigravity at /path/to/project/.agent/skills/google-maps
+Installed skill 'google-maps' to codex at /path/to/project/.agents/skills/google-maps
+Installed skill 'google-maps' to claude-code at /path/to/project/.claude/skills/google-maps
+```
 
 
 ## Tutorial 
 
+###  1. Installation
+
+**Node**
+``` NodeJS
+npm install -g @aiagenta2z/agtm
+```
+
+note: run nodejs environment, you need to add -g to install, so you can just run command line `agtm` without the `npx agtm` prefix,
+
+Command line to register your AI agent from GitHub, Local config(agent.json, agent.yaml) or search the AI agent marketplace.
+To see detailed usage, visit the GitHub of `agtm` at Documentation (https://github.com/aiagenta2z/ai-agent-marketplace)
+
+**Python**
+```
+pip install ai-agent-marketplace
+```
+
+The cli bin will be copied to python path. Future version, only 'node' command line will be supported.
+
+### Setup
 Let's say you have create a repo of your open source AI Agent (e.g. https://github.com/AI-Hub-Admin/My-First-AI-Coding-Agent), And you want to 
 register and get a registered detailed page of AI Agent in the marketplace and monitor the traffic.
 
-**1. Setup Access Key**
+**Setup Access Key**
 
 First you need to setup an access_key in the environment to authenticate.
-Register your AI Agent Marketplace Access Key here (https://deepnlp.org/workspace/keys)
+Register your AI Agent Marketplace [Access Key here](https://deepnlp.org/workspace/keys)
 
 ```
 export AI_AGENT_MARKETPLACE_ACCESS_KEY="{your_access_key}"
@@ -51,7 +92,38 @@ You can also use the test key for validation, which is associated with a test-on
 export AI_AGENT_MARKETPLACE_ACCESS_KEY="TEST_KEY_AI_AGENT_REGISTRY"
 ```
 
-**2. Registry AI Agent from your GitHub**
+### 2. Skills 
+
+Install skills from the `aiagenta2z/onekey-agent-router` Github repo (`user_name/repo_name`). The `google-maps` skill is a good starter example.
+
+Under the `./skills/google-maps` folder of the target github repo.
+
+```shell
+agtm add aiagenta2z/onekey-agent-router --skill google-maps
+```
+
+Install to a specific agent (codex):
+
+```shell
+agtm add aiagenta2z/onekey-agent-router --skill google-maps -a codex
+```
+
+Install to a specific agent (openclaw):
+
+```shell
+agtm add aiagenta2z/onekey-agent-router --skill google-maps -a openclaw
+```
+
+Install to global paths instead of local project paths:
+
+```shell
+agtm add aiagenta2z/onekey-agent-router --skill google-maps -g
+```
+
+
+### 3. AI Agent Registry
+
+**Registry AI Agent from your GitHub**
 
 The default registry provider endpoint includes: [DeepNLP AI Agent Registry Endpoint](https://www.deepnlp.org/api/ai_agent_marketplace/registry) | 
 [aiagenta2z.com Registry Endpoint](https://www.aiagenta2z.com/api/ai_agent_marketplace/registry)|[aiagenta2z.org Registry Endpoint](https://www.aiagenta2z.org/api/ai_agent_marketplace/registry), etc. 
@@ -64,7 +136,7 @@ agtm upload --github https://github.com/AI-Hub-Admin/My-First-AI-Coding-Agent
 ```
 
 
-**3. Registry AI Agent from agent.json or agent.yaml file**
+**Registry AI Agent from agent.json or agent.yaml file**
 
 
 ```
@@ -117,7 +189,7 @@ price_subscription: "Basic: your basic plan introduction, Advanced: Your Advance
 
 ```
 
-**4. Use your customized endpoint and schema definition**
+**Use your customized endpoint and schema definition**
 
 You have the flexibility to use the AI Agent marketplace/manager cli `agtm` to submit customized ai agent schema to your customized endpoint.
 
@@ -132,7 +204,7 @@ Note: the keys in agent.json and schema.json should match. Package will select k
 
 Remember to keep the `access_key` in safe place, the post request will post the `access_key` as well as schema to the endpoint. 
 
-## default schema.json definition
+#### default schema.json definition
 ```
 {
     "required": [
@@ -201,7 +273,7 @@ It will return an error message showing the endpoint and data, https://www.examp
 ```
 
 
-**5. Search AI Agent Marketplace**
+**Search AI Agent Marketplace**
 
 ```
 
@@ -225,4 +297,3 @@ Retrieving specific agent with unique ID: AI-Hub-Admin/My-First-AI-Coding-Agent
 
 {'total_hits': 1, 'id': 'AI-Hub-Admin/My-First-AI-Coding-Agent', 'items': [{'content_name': 'My-First-AI-Coding-Agent', 'publisher_id': 'pub-ai-hub-admin', 'detail_url': 'https://www.deepnlp.org/store/ai-agent/ai-agent/pub-ai-hub-admin/my-first-ai-coding-agent', 'website': 'https://github.com/AI-Hub-Admin/My-First-AI-Coding-Agent', 'github': 'https://github.com/AI-Hub-Admin/My-First-AI-Coding-Agent', 'review_cnt': '0', 'rating': '0.0', 'description': '# My-First-AI-Coding-Agent\nAI Agent Registry Demo project\n\n', 'subfield': 'AI AGENT', 'field': 'AI AGENT', 'id': 'ai-hub-admin/my-first-ai-coding-agent', 'content_tag_list': 'GitHub 0', 'thumbnail_picture': 'https://avatars.githubusercontent.com/u/184629057?v=4'}]}
 ```
-

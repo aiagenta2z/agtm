@@ -12,6 +12,7 @@
     // Standard TypeScript features
     "esModuleInterop": true,
     "strict": true,
+    "types": ["node"],
     
     // Output directory (where compiled JS goes)
     "outDir": "./dist"

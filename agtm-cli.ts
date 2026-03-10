@@ -4,6 +4,10 @@ import { Command } from 'commander';
 import axios from 'axios';
 import * as fs from 'node:fs';
 import * as yaml from 'js-yaml';
+import * as path from 'node:path';
+import * as os from 'node:os';
+import { execFileSync } from 'node:child_process';
+import { createInterface } from 'node:readline/promises';
 
 
 // --- Configuration ---
@@ -94,6 +98,357 @@ function fillItemInfoDict(
     }
 
     return item_info;
+}
+
+// --- Skills Utilities ---
+
+type AgentSpec = {
+    id: string;
+    projectPath: string;
+    globalPath: string;
+};
+
+type SkillInfo = {
+    name: string;
+    dir: string;
+    source: string;
+};
+
+const AGENT_SPECS: AgentSpec[] = [
+    { id: 'amp', projectPath: '.agents/skills', globalPath: '.config/agents/skills' },
+    { id: 'kimi-cli', projectPath: '.agents/skills', globalPath: '.config/agents/skills' },
+    { id: 'replit', projectPath: '.agents/skills', globalPath: '.config/agents/skills' },
+    { id: 'universal', projectPath: '.agents/skills', globalPath: '.config/agents/skills' },
+    { id: 'antigravity', projectPath: '.agent/skills', globalPath: '.gemini/antigravity/skills' },
+    { id: 'augment', projectPath: '.augment/skills', globalPath: '.augment/skills' },
+    { id: 'claude-code', projectPath: '.claude/skills', globalPath: '.claude/skills' },
+    { id: 'openclaw', projectPath: 'skills', globalPath: '.openclaw/skills' },
+    { id: 'cline', projectPath: '.agents/skills', globalPath: '.agents/skills' },
+    { id: 'codebuddy', projectPath: '.codebuddy/skills', globalPath: '.codebuddy/skills' },
+    { id: 'codex', projectPath: '.agents/skills', globalPath: '.codex/skills' },
+    { id: 'command-code', projectPath: '.commandcode/skills', globalPath: '.commandcode/skills' },
+    { id: 'continue', projectPath: '.continue/skills', globalPath: '.continue/skills' },
+    { id: 'cortex', projectPath: '.cortex/skills', globalPath: '.snowflake/cortex/skills' },
+    { id: 'crush', projectPath: '.crush/skills', globalPath: '.config/crush/skills' },
+    { id: 'cursor', projectPath: '.agents/skills', globalPath: '.cursor/skills' },
+    { id: 'droid', projectPath: '.factory/skills', globalPath: '.factory/skills' },
+    { id: 'gemini-cli', projectPath: '.agents/skills', globalPath: '.gemini/skills' },
+    { id: 'github-copilot', projectPath: '.agents/skills', globalPath: '.copilot/skills' },
+    { id: 'goose', projectPath: '.goose/skills', globalPath: '.config/goose/skills' },
+    { id: 'junie', projectPath: '.junie/skills', globalPath: '.junie/skills' },
+    { id: 'iflow-cli', projectPath: '.iflow/skills', globalPath: '.iflow/skills' },
+    { id: 'kilo', projectPath: '.kilocode/skills', globalPath: '.kilocode/skills' },
+    { id: 'kiro-cli', projectPath: '.kiro/skills', globalPath: '.kiro/skills' },
+    { id: 'kode', projectPath: '.kode/skills', globalPath: '.kode/skills' },
+    { id: 'mcpjam', projectPath: '.mcpjam/skills', globalPath: '.mcpjam/skills' },
+    { id: 'mistral-vibe', projectPath: '.vibe/skills', globalPath: '.vibe/skills' },
+    { id: 'mux', projectPath: '.mux/skills', globalPath: '.mux/skills' },
+    { id: 'opencode', projectPath: '.agents/skills', globalPath: '.config/opencode/skills' },
+    { id: 'openhands', projectPath: '.openhands/skills', globalPath: '.openhands/skills' },
+    { id: 'pi', projectPath: '.pi/skills', globalPath: '.pi/agent/skills' },
+    { id: 'qoder', projectPath: '.qoder/skills', globalPath: '.qoder/skills' },
+    { id: 'qwen-code', projectPath: '.qwen/skills', globalPath: '.qwen/skills' },
+    { id: 'roo', projectPath: '.roo/skills', globalPath: '.roo/skills' },
+    { id: 'trae', projectPath: '.trae/skills', globalPath: '.trae/skills' },
+    { id: 'trae-cn', projectPath: '.trae/skills', globalPath: '.trae-cn/skills' },
+    { id: 'windsurf', projectPath: '.windsurf/skills', globalPath: '.codeium/windsurf/skills' },
+    { id: 'zencoder', projectPath: '.zencoder/skills', globalPath: '.zencoder/skills' },
+    { id: 'neovate', projectPath: '.neovate/skills', globalPath: '.neovate/skills' },
+    { id: 'pochi', projectPath: '.pochi/skills', globalPath: '.pochi/skills' },
+    { id: 'adal', projectPath: '.adal/skills', globalPath: '.adal/skills' }
+];
+const DEFAULT_AGENT_IDS = ['antigravity', 'codex', 'claude-code', 'openclaw'];
+
+function normalizeAgentId(value: string): string {
+    return value.toLowerCase().replace(/[\s_]+/g, '-').replace(/-+/g, '-').trim();
+}
+
+function resolveAgents(agentArgs?: string[]): AgentSpec[] {
+    if (agentArgs && agentArgs.length > 0) {
+        const normalized = agentArgs.map(normalizeAgentId);
+        if (normalized.includes('*')) {
+            return AGENT_SPECS;
+        }
+        const selected: AgentSpec[] = [];
+        for (const agentId of normalized) {
+            const match = AGENT_SPECS.find((spec) => spec.id === agentId);
+            if (!match) {
+                console.error(`\n❌ Error: Unknown agent '${agentId}'.`);
+                console.error(`Supported agents: ${AGENT_SPECS.map((spec) => spec.id).join(', ')}`);
+                process.exit(1);
+            }
+            selected.push(match);
+        }
+        return selected;
+    }
+
+    const detected = AGENT_SPECS.filter((spec) =>
+        fs.existsSync(path.join(process.cwd(), spec.projectPath))
+    );
+
+    if (detected.length > 0) {
+        return detected;
+    }
+
+    const fallback = AGENT_SPECS.find((spec) => spec.id === 'codex');
+    return fallback ? [fallback] : [];
+}
+
+function printAvailableAgents(): void {
+    console.log('\nAvailable agents:');
+    AGENT_SPECS.forEach((spec, index) => {
+        const marker = DEFAULT_AGENT_IDS.includes(spec.id) ? ' (default)' : '';
+        console.log(`  ${index + 1}. ${spec.id}${marker}`);
+    });
+}
+
+async function promptAgentSelection(): Promise<AgentSpec[]> {
+    if (!process.stdin.isTTY) {
+        return resolveAgents(DEFAULT_AGENT_IDS);
+    }
+
+    printAvailableAgents();
+    console.log('\nSelect agents by number or id (comma-separated).');
+    console.log(`Press Enter to use defaults: ${DEFAULT_AGENT_IDS.join(', ')}`);
+    console.log('Type "*" to select all agents.');
+
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+        const answerRaw = await rl.question('\nAgents: ');
+        const answer = answerRaw.trim();
+        if (answer === '') {
+            return resolveAgents(DEFAULT_AGENT_IDS);
+        }
+        if (answer === '*') {
+            return AGENT_SPECS;
+        }
+
+        const tokens = answer
+            .split(/[,\s]+/)
+            .map((token) => token.trim())
+            .filter(Boolean);
+
+        const ids: string[] = tokens.map((token) => {
+            if (/^\d+$/.test(token)) {
+                const index = Number(token) - 1;
+                if (index < 0 || index >= AGENT_SPECS.length) {
+                    console.error(`\n❌ Error: Invalid agent number '${token}'.`);
+                    process.exit(1);
+                }
+                return AGENT_SPECS[index].id;
+            }
+            return token;
+        });
+
+        return resolveAgents(ids);
+    } finally {
+        rl.close();
+    }
+}
+
+function getAgentInstallPath(agent: AgentSpec, useGlobal: boolean): string {
+    if (useGlobal) {
+        return path.join(os.homedir(), agent.globalPath);
+    }
+    return path.join(process.cwd(), agent.projectPath);
+}
+
+function parseSkillFrontmatter(content: string): { name?: string } {
+    if (!content.startsWith('---')) {
+        return {};
+    }
+    const endIndex = content.indexOf('\n---', 3);
+    if (endIndex === -1) {
+        return {};
+    }
+    const frontmatter = content.slice(3, endIndex);
+    try {
+        const parsed = yaml.load(frontmatter);
+        if (parsed && typeof parsed === 'object' && 'name' in parsed) {
+            return { name: String((parsed as Record<string, any>).name || '') };
+        }
+    } catch {
+        return {};
+    }
+    return {};
+}
+
+function findSkillFiles(startDir: string): string[] {
+    const results: string[] = [];
+    const stack: string[] = [startDir];
+    while (stack.length > 0) {
+        const current = stack.pop();
+        if (!current) {
+            continue;
+        }
+        let entries: fs.Dirent[];
+        try {
+            entries = fs.readdirSync(current, { withFileTypes: true });
+        } catch {
+            continue;
+        }
+        for (const entry of entries) {
+            if (entry.name === 'node_modules' || entry.name === '.git') {
+                continue;
+            }
+            const fullPath = path.join(current, entry.name);
+            if (entry.isDirectory()) {
+                stack.push(fullPath);
+            } else if (entry.isFile() && entry.name === 'SKILL.md') {
+                results.push(fullPath);
+            }
+        }
+    }
+    return results;
+}
+
+function discoverSkills(basePath: string): SkillInfo[] {
+    const skills: SkillInfo[] = [];
+    const directSkill = path.join(basePath, 'SKILL.md');
+    if (fs.existsSync(directSkill)) {
+        const content = fs.readFileSync(directSkill, 'utf8');
+        const meta = parseSkillFrontmatter(content);
+        const name = meta.name && meta.name.trim() ? meta.name.trim() : path.basename(basePath);
+        skills.push({ name, dir: basePath, source: directSkill });
+        return skills;
+    }
+
+    const skillsRoot = path.join(basePath, 'skills');
+    const searchRoot = fs.existsSync(skillsRoot) ? skillsRoot : basePath;
+    const skillFiles = findSkillFiles(searchRoot);
+
+    for (const skillFile of skillFiles) {
+        const skillDir = path.dirname(skillFile);
+        const content = fs.readFileSync(skillFile, 'utf8');
+        const meta = parseSkillFrontmatter(content);
+        const name = meta.name && meta.name.trim() ? meta.name.trim() : path.basename(skillDir);
+        skills.push({ name, dir: skillDir, source: skillFile });
+    }
+    return skills;
+}
+
+function parseGitHubSource(input: string): { cloneUrl: string; subPath?: string; branch?: string } | null {
+    if (input.startsWith('https://github.com/')) {
+        const match = input.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/tree\/([^/]+)\/?(.*))?$/);
+        if (!match) {
+            return null;
+        }
+        const [, owner, repo, branch, subPath] = match;
+        return {
+            cloneUrl: `https://github.com/${owner}/${repo}.git`,
+            branch,
+            subPath: subPath ? subPath.replace(/^\/+/, '') : undefined
+        };
+    }
+    if (/^[^/]+\/[^/]+$/.test(input)) {
+        return {
+            cloneUrl: `https://github.com/${input}.git`
+        };
+    }
+    return null;
+}
+
+function resolveSkillSource(source: string): { root: string; cleanup?: () => void } {
+    if (fs.existsSync(source)) {
+        return { root: path.resolve(source) };
+    }
+
+    const parsed = parseGitHubSource(source);
+    if (!parsed) {
+        console.error(`\n❌ Error: Unsupported source '${source}'. Provide a local path or GitHub URL.`);
+        process.exit(1);
+    }
+    const parsedValue = parsed as NonNullable<typeof parsed>;
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agtm-skills-'));
+    const gitArgs = ['clone', '--depth', '1'];
+    if (parsedValue.branch) {
+        gitArgs.push('--branch', parsedValue.branch);
+    }
+    gitArgs.push(parsedValue.cloneUrl, tmpDir);
+    try {
+        execFileSync('git', gitArgs, { stdio: 'ignore' });
+    } catch (e: any) {
+        console.error(`\n❌ Error: Failed to clone repository. Ensure 'git' is installed and the URL is correct.`);
+        process.exit(1);
+    }
+
+    const root = parsedValue.subPath ? path.join(tmpDir, parsedValue.subPath) : tmpDir;
+    if (!fs.existsSync(root)) {
+        console.error(`\n❌ Error: Path '${parsedValue.subPath}' does not exist in the repository.`);
+        process.exit(1);
+    }
+    return {
+        root,
+        cleanup: () => {
+            try {
+                fs.rmSync(tmpDir, { recursive: true, force: true });
+            } catch {
+                // ignore cleanup errors
+            }
+        }
+    };
+}
+
+function ensureDir(dirPath: string) {
+    fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function copySkillDir(sourceDir: string, targetDir: string) {
+    if (fs.existsSync(targetDir)) {
+        fs.rmSync(targetDir, { recursive: true, force: true });
+    }
+    fs.cpSync(sourceDir, targetDir, { recursive: true });
+}
+
+async function handleAdd(options: { source?: string; skill?: string[]; agent?: string[]; global?: boolean }) {
+    const source = options.source;
+    if (!source) {
+        console.error("\n❌ Error: 'add' command requires a source path or GitHub URL.");
+        process.exit(1);
+        return;
+    }
+
+    const resolved = resolveSkillSource(source);
+    const skills = discoverSkills(resolved.root);
+    if (skills.length === 0) {
+        console.error(`\n❌ Error: No skills found in source '${source}'.`);
+        resolved.cleanup?.();
+        process.exit(1);
+    }
+
+    const requestedSkills = (options.skill && options.skill.length > 0) ? options.skill : ['*'];
+    const normalizedRequested = requestedSkills.map((name) => name.toLowerCase());
+    const filteredSkills = normalizedRequested.includes('*')
+        ? skills
+        : skills.filter((skill) => normalizedRequested.includes(skill.name.toLowerCase()));
+
+    if (filteredSkills.length === 0) {
+        console.error(`\n❌ Error: Requested skills not found. Available skills: ${skills.map((s) => s.name).join(', ')}`);
+        resolved.cleanup?.();
+        process.exit(1);
+    }
+
+    const agents = (options.agent && options.agent.length > 0)
+        ? resolveAgents(options.agent)
+        : resolveAgents(DEFAULT_AGENT_IDS);
+    if (agents.length === 0) {
+        console.error('\n❌ Error: No target agents resolved.');
+        resolved.cleanup?.();
+        process.exit(1);
+    }
+
+    for (const agent of agents) {
+        const baseDir = getAgentInstallPath(agent, Boolean(options.global));
+        ensureDir(baseDir);
+        for (const skill of filteredSkills) {
+            const targetDir = path.join(baseDir, skill.name);
+            copySkillDir(skill.dir, targetDir);
+            console.log(`Installed skill '${skill.name}' to ${agent.id} at ${targetDir}`);
+        }
+    }
+
+    resolved.cleanup?.();
 }
 
 // --- Command Handlers ---
@@ -243,7 +598,7 @@ uploadCommand.option('--endpoint <url>', 'The endpoint URL to post data to (over
 uploadCommand.option('--schema <path>', 'Path to a .json or .yaml, schema.json file containing the agent\'s meta information.', "");
 
 
-uploadCommand.hook('preAction', (thisCommand) => {
+uploadCommand.hook('preAction', (thisCommand: Command) => {
     const options = thisCommand.opts();
     if (!options.github && !options.config) {
         console.error("\n❌ Error: 'upload' command requires either --github or --config.");
@@ -263,8 +618,24 @@ program.command('search')
     .description('Search for registered AI Agents by query or specific ID.')
     .option('--q <query>', 'A free-text query string to search for agents.')
     .option('--id <id>', 'The specific unique ID of the AI Agent to retrieve, e.g. "AI-Hub-Admin/my-first-ai-coding-agent" ')
-    .option('--count-per-page <count>', 'Count per page of search results returned.', (value) => parseInt(value, 10), 10) // default=10
+    .option('--count-per-page <count>', 'Count per page of search results returned.', (value: string) => parseInt(value, 10), 10) // default=10
     .action(handleSearch);
 
-program.parse(process.argv);
+// 3. ADD Command (Skills)
+program.command('add')
+    .description('Download and install skills from a GitHub repo or local path.')
+    .argument('<source>', 'GitHub repo URL, owner/repo, or local path')
+    .option('-s, --skill <skill>', 'Install a specific skill (repeatable). Use "*" for all skills.', (value: string, prev: string[]) => {
+        const list = prev || [];
+        list.push(value);
+        return list;
+    }, [])
+    .option('-a, --agent <agent>', 'Target specific agents (repeatable). Use "*" for all agents.', (value: string, prev: string[]) => {
+        const list = prev || [];
+        list.push(value);
+        return list;
+    }, [])
+    .option('-g, --global', 'Install to global agent directories instead of project paths.')
+    .action((source: string, options: Record<string, any>) => handleAdd({ ...options, source }));
 
+program.parse(process.argv);

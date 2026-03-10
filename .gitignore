@@ -1,9 +1,8 @@
+.idea/
 .DS_Store
-*.DS_Store
-/dist
-/node_modules
-test_run_package.sh
-package-lock.json
-python/
+*node_modules
 release/
-schema.json
+dist/
+test/test_run_package.sh
+test/
+python/
