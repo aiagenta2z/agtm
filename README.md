@@ -3,12 +3,13 @@
 
 [GitHub](https://github.com/aiagenta2z/agtm)|[AI Agent Marketplace CLI Doc](https://www.deepnlp.org/doc/ai_agent_marketplace)|[DeepNLP AI Agent Marketplace](https://www.deepnlp.org/store/ai-agent) | [OneKey Agent Router](https://www.deepnlp.org/agent/onekey-mcp-router) | [Agent MCP OneKey Router Ranking](https://www.deepnlp.org/agent/rankings) | [NodeJS agtm](https://www.npmjs.com/package/@aiagenta2z/agtm)
 
-
 The command line `agtm upload` , `agtm search`,  `agtm add` helps users to register and publish their AI Agents meta api information from agent.json/agent.yaml file
 or a github repo URL in a few seconds.
 
-'agtm' means 'ai agent marketplace' or 'ai agent manager', you can use this command line to manage agent meta, skills add,installation, etc.
-To use the command line, you need to first install the package either using python or node environment
+'agtm' means 'ai agent marketplace' or 'ai agent manager', you can use this command line to manage agent meta, download skills from github to your project, add mcp server to config, etc.
+To use the command line, you need to first install the package either using python or node.
+
+<img height="300" alt="image" src="https://github.com/user-attachments/assets/3708c9ad-27c4-4173-a298-4b1486f6c612" />
 
 ## Quickstart
 
