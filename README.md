@@ -1,5 +1,5 @@
 
-### agtm: Command Line CLI Tool for AI Agent Registry in the Open Source AI Agent Marketplace
+### agtm: Command Line CLI Tool for AI Agent Registry, Agent Skills MCP Management in the Open Source AI Agent Marketplace
 
 [GitHub](https://github.com/aiagenta2z/agtm)|[AI Agent Marketplace CLI Doc](https://www.deepnlp.org/doc/ai_agent_marketplace)|[DeepNLP AI Agent Marketplace](https://www.deepnlp.org/store/ai-agent) | [OneKey Agent Router](https://www.deepnlp.org/agent/onekey-mcp-router) | [Agent MCP OneKey Router Ranking](https://www.deepnlp.org/agent/rankings) | [NodeJS agtm](https://www.npmjs.com/package/@aiagenta2z/agtm)
 
