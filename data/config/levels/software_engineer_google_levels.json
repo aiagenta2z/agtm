@@ -1,0 +1,42 @@
+{
+  "software-engineering": {
+    "Google": [
+      {
+        "level": "L3",
+        "title": "Software Engineer II",
+        "description": "Entry-level engineer. Delivers well-scoped tasks with guidance. Learning codebase, tools, and best practices.",
+        "signals": ["task execution", "learning velocity", "code quality basics"]
+      },
+      {
+        "level": "L4",
+        "title": "Software Engineer III",
+        "description": "Independent contributor. Owns small features end-to-end. Writes maintainable code and participates in design discussions.",
+        "signals": ["ownership", "code quality", "debugging ability"]
+      },
+      {
+        "level": "L5",
+        "title": "Senior Software Engineer",
+        "description": "Leads projects and drives design decisions. Mentors others and improves system quality.",
+        "signals": ["technical leadership", "system design", "mentorship"]
+      },
+      {
+        "level": "L6",
+        "title": "Staff Software Engineer",
+        "description": "Owns large systems or cross-team initiatives. Sets technical direction and influences multiple teams.",
+        "signals": ["architecture", "cross-team impact", "scalability thinking"]
+      },
+      {
+        "level": "L7",
+        "title": "Senior Staff Software Engineer",
+        "description": "Drives org-level technical strategy. Solves ambiguous, high-impact problems.",
+        "signals": ["org influence", "complex problem solving", "long-term vision"]
+      },
+      {
+        "level": "L8",
+        "title": "Principal Engineer",
+        "description": "Company-wide impact. Defines technical standards and long-term architecture.",
+        "signals": ["company impact", "vision", "industry-level thinking"]
+      }
+    ]
+  }
+}

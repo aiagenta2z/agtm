@@ -1,0 +1,118 @@
+{
+  "microsoft/playwright-cli": {
+    "hints": [
+      {
+        "cli": "playwright-cli open [url]",
+        "hint": "open browser, optionally navigate to url"
+      },
+      {
+        "cli": "playwright-cli goto <url> ",
+        "hint": "navigate to a url"
+      }
+    ]
+  },
+  "googleworkspace/cli": {
+    "hints": [
+      {
+        "cli": "gws drive files list --params",
+        "hint": "List the 10 most recent files"
+      }
+    ]
+  },
+  "aiagenta2z/onekey-gateway": {
+    "hints": [
+      {
+        "cli": "onekey agent <unique_id> <api_id> <data_json|@file>",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey mcp <server_name> [--name config_name]",
+        "hint": "Connect to a Model Context Protocol server to extend agent capabilities"
+      },
+      {
+        "cli": "onekey llm --provider <provider> --model <model> --messages <json|@file> [--temperature <num>] [--response-format <format>] [--options <json|@file>]",
+        "hint": "Execute a direct LLM call with granular control over provider, model, and sampling parameters"
+      },
+      {
+        "cli": "onekey llm --payload <json|@file>",
+        "hint": "Run a raw LLM request using a pre-formatted JSON payload or configuration file"
+      }
+    ]
+  },
+"openai/codex-cli": {
+    "hints": [
+      {
+        "cli": "codex",
+        "hint": "Start an interactive terminal UI (TUI) coding session"
+      },
+      {
+        "cli": "codex exec \"[instruction]\"",
+        "hint": "Run Codex non-interactively and stream results to stdout"
+      }
+    ]
+  },
+  "anthropic/claude-code": {
+    "hints": [
+      {
+        "cli": "claude \"[prompt]\"",
+        "hint": "Start an interactive session with an initial task"
+      },
+      {
+        "cli": "claude --dangerously-skip-permissions",
+        "hint": "Run without interrupting for tool execution permissions"
+      }
+    ]
+  },
+"paul-gauthier/aider": {
+    "hints": [
+      {
+        "cli": "aider --model [model_name]",
+        "hint": "Start aider with a specific LLM context"
+      },
+      {
+        "cli": "/test [command]",
+        "hint": "Run a test; aider will automatically attempt to fix code if it fails"
+      }
+    ]
+  },
+  "openinterpreter/open-interpreter": {
+    "hints": [
+      {
+        "cli": "interpreter",
+        "hint": "Launch the natural language interface to control your local computer"
+      },
+      {
+        "cli": "interpreter --os",
+        "hint": "Enable visual/OS-level control for mouse and keyboard automation"
+      }
+    ]
+  },
+  "google-gemini/gemini-cli": {
+    "hints": [
+      {
+        "cli": "gemini",
+        "hint": "Start an interactive agentic session in the current directory"
+      },
+      {
+        "cli": "gemini -p \"[prompt] @[file/dir]\"",
+        "hint": "Run a prompt with specific file or directory context injected"
+      },
+      {
+        "cli": "gemini --yolo",
+        "hint": "Enable 'YOLO mode' to auto-approve all tool and shell executions"
+      },
+      {
+        "cli": "/memory add \"[fact]\"",
+        "hint": "Save a persistent fact to the project's GEMINI.md hierarchical memory"
+      },
+      {
+        "cli": "/mcp list",
+        "hint": "List all active Model Context Protocol servers and available tools"
+      },
+      {
+        "cli": "/restore",
+        "hint": "List or restore project state checkpoints created before file edits"
+      }
+    ]
+  }
+}

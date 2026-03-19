@@ -6,3 +6,9 @@ dist/
 test/test_run_package.sh
 test/
 python/
+.agent
+.agents
+.agtm
+bak
+test
+

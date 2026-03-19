@@ -1,17 +1,20 @@
 {
   "name": "@aiagenta2z/agtm",
-  "version": "1.0.7",
-  "description": "agtm: Open Source CLI for AI Agent | Skills | MCP Marketplace Registration, AI Agents Management, AI Agents Index and Search",
+  "version": "1.0.9",
+  "description": "agtm: CLI Tool for AI Agent Management, Skills, Agent Registry, Benchmarks and Hints in AI Agent Marketplace\n",
   "main": "dist/agtm-cli.js",
   "type": "module",
   "bin": {
     "agtm": "dist/agtm-cli.js"
   },
   "scripts": {
-    "build": "tsc && node -e \"require('fs').chmodSync('dist/agtm-cli.js', 0o755)\""
+    "build": "tsc && node -e \"require('fs').chmodSync('dist/agtm-cli.js', 0o755)\"",
+    "test": "node --loader ts-node/esm test/skills.spec.ts"
   },
   "files": [
     "dist",
+    "data",
+    "docs",
     "README.md",
     "agent.json",
     "agent.yaml",
@@ -26,6 +29,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@aiagenta2z/onekey-gateway": "^0.1.1",
     "axios": "^1.13.2",
     "commander": "^14.0.2",
     "js-yaml": "^4.1.0"

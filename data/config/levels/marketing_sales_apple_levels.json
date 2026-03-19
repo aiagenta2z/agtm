@@ -1,0 +1,83 @@
+{
+  "marketing-and-sales": {
+    "Apple": [
+      {
+        "level": "M1",
+        "title": "Marketing / Sales Associate",
+        "description": "Entry-level contributor supporting campaigns, retail operations, or sales initiatives. Executes well-defined tasks under guidance.",
+        "signals": [
+          "task execution",
+          "attention to detail",
+          "basic customer interaction",
+          "learning speed"
+        ]
+      },
+      {
+        "level": "M2",
+        "title": "Marketing / Sales Specialist",
+        "description": "Independently executes campaigns or sales processes. Contributes to customer engagement and supports revenue goals.",
+        "signals": [
+          "execution quality",
+          "customer engagement",
+          "ownership of small initiatives",
+          "data awareness"
+        ]
+      },
+      {
+        "level": "M3",
+        "title": "Senior Specialist",
+        "description": "Owns key campaigns, product messaging, or regional sales performance. Drives measurable business impact.",
+        "signals": [
+          "campaign ownership",
+          "revenue contribution",
+          "cross-functional collaboration",
+          "analytics usage"
+        ]
+      },
+      {
+        "level": "M4",
+        "title": "Manager",
+        "description": "Leads teams or major initiatives. Defines strategy for campaigns or sales programs and ensures execution excellence.",
+        "signals": [
+          "team leadership",
+          "strategic planning",
+          "execution consistency",
+          "performance management"
+        ]
+      },
+      {
+        "level": "M5",
+        "title": "Senior Manager",
+        "description": "Drives large-scale marketing or sales programs across regions or product lines. Aligns execution with business goals.",
+        "signals": [
+          "program leadership",
+          "cross-region coordination",
+          "scaling execution",
+          "business alignment"
+        ]
+      },
+      {
+        "level": "M6",
+        "title": "Director",
+        "description": "Defines organizational strategy for marketing or sales. Oversees multiple teams and drives significant business outcomes.",
+        "signals": [
+          "organizational impact",
+          "strategy ownership",
+          "multi-team leadership",
+          "market positioning"
+        ]
+      },
+      {
+        "level": "M7",
+        "title": "Senior Director / VP",
+        "description": "Sets long-term vision and direction for major business units. Influences company-wide marketing or sales strategy.",
+        "signals": [
+          "company-level influence",
+          "vision setting",
+          "brand leadership",
+          "market expansion"
+        ]
+      }
+    ]
+  }
+}

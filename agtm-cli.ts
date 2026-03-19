@@ -6,8 +6,10 @@ import * as fs from 'node:fs';
 import * as yaml from 'js-yaml';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
+import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 
 
 // --- Configuration ---
@@ -17,6 +19,16 @@ const REGISTRY_ENDPOINT_v1 = `${BASE_URL}/v1`;
 const SEARCH_ENDPOINT = `${BASE_URL}/v2`; // Assuming a search endpoint exists
 const ACCESS_KEY_ENV_VAR = 'AI_AGENT_MARKETPLACE_ACCESS_KEY';
 const MOCK_RETURN_URL = "https://www.deepnlp.org/store/ai-agent/ai-agent/pub-AI-Hub-Admin/my-first-ai-coding-agent";
+const CLI_DIR = path.dirname(fileURLToPath(import.meta.url));
+const MODE_AGENT = 'agent';
+const MODE_HUMAN = 'human';
+const LOG_ENABLE = true;
+const AGTM_LOCAL_DIR = path.join(process.cwd(), '.agtm');
+const AGTM_GLOBAL_DIR = path.join(os.homedir(), '.agtm');
+const SKILL_LOG_DIR_LOCAL = path.join(AGTM_LOCAL_DIR, 'skills', 'log');
+const SKILL_LOG_DIR_GLOBAL = path.join(AGTM_GLOBAL_DIR, 'skills', 'log');
+const SKILL_LEVELS_DIR_LOCAL = path.join(AGTM_LOCAL_DIR, 'levels');
+const SKILL_LEVELS_DIR_GLOBAL = path.join(AGTM_GLOBAL_DIR, 'levels');
 
 // --- Utility Functions ---
 
@@ -253,7 +265,7 @@ function getAgentInstallPath(agent: AgentSpec, useGlobal: boolean): string {
     return path.join(process.cwd(), agent.projectPath);
 }
 
-function parseSkillFrontmatter(content: string): { name?: string } {
+function parseSkillFrontmatter(content: string): { name?: string; description?: string } {
     if (!content.startsWith('---')) {
         return {};
     }
@@ -264,13 +276,35 @@ function parseSkillFrontmatter(content: string): { name?: string } {
     const frontmatter = content.slice(3, endIndex);
     try {
         const parsed = yaml.load(frontmatter);
-        if (parsed && typeof parsed === 'object' && 'name' in parsed) {
-            return { name: String((parsed as Record<string, any>).name || '') };
+        if (parsed && typeof parsed === 'object') {
+            const record = parsed as Record<string, any>;
+            const name = 'name' in record ? String(record.name || '') : undefined;
+            const description = 'description' in record ? String(record.description || '') : undefined;
+            return { name, description };
         }
     } catch {
         return {};
     }
     return {};
+}
+
+function extractDescriptionFromMarkdown(content: string): string | undefined {
+    const lines = content.split(/\r?\n/);
+    let idx = 0;
+    if (lines[idx]?.trim() === '---') {
+        idx += 1;
+        while (idx < lines.length && lines[idx].trim() !== '---') {
+            idx += 1;
+        }
+        idx += 1;
+    }
+    for (; idx < lines.length; idx += 1) {
+        const line = lines[idx].trim();
+        if (line) {
+            return line;
+        }
+    }
+    return undefined;
 }
 
 function findSkillFiles(startDir: string): string[] {
@@ -302,7 +336,18 @@ function findSkillFiles(startDir: string): string[] {
     return results;
 }
 
-function discoverSkills(basePath: string): SkillInfo[] {
+function discoverSkills(root: string) {
+    const standardSkills = discoverStandardSkills(root);
+
+    if (standardSkills.length > 0) {
+        return standardSkills;
+    }
+    console.log("INFO: Starting to load various skills layout formats ./path/subfolder/skill_name.md")
+    // fallback: normalize arbitrary markdown skills
+    return normalizeExternalSkills(root);
+}
+
+function discoverStandardSkills(basePath: string): SkillInfo[] {
     const skills: SkillInfo[] = [];
     const directSkill = path.join(basePath, 'SKILL.md');
     if (fs.existsSync(directSkill)) {
@@ -326,6 +371,71 @@ function discoverSkills(basePath: string): SkillInfo[] {
     }
     return skills;
 }
+
+//discover skills, e.g. agency-agents
+function normalizeExternalSkills(root: string): { name: string; dir: string }[] {
+    const results: { name: string; dir: string }[] = [];
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "agtm-skill-"));
+
+    function walk(current: string, relativeParts: string[] = []) {
+        const entries = fs.readdirSync(current, { withFileTypes: true });
+
+        for (const entry of entries) {
+            const fullPath = path.join(current, entry.name);
+
+            if (entry.isDirectory()) {
+                walk(fullPath, [...relativeParts, entry.name]);
+            } else if (entry.isFile() && entry.name.endsWith(".md")) {
+                const skillBaseName = entry.name.replace(/\.md$/, "");
+                if (skillBaseName.startsWith("CONTRIBUTING")
+                    || skillBaseName.startsWith("README")
+                    ||  skillBaseName.startsWith("PULL_REQUEST_TEMPLATE")) {
+                    // skip
+                    continue;
+                }
+                // Build normalized name
+                const prefix = relativeParts.join("_");
+                // const finalName = prefix
+                //    ? `${prefix}_${skillBaseName}`
+                //    : skillBaseName;
+                //
+                const finalName = skillBaseName;
+                const targetDir = path.join(tmpBase, finalName);
+                fs.mkdirSync(targetDir, { recursive: true });
+
+                // Copy .md → SKILL.md
+                fs.copyFileSync(fullPath, path.join(targetDir, "SKILL.md"));
+
+                const skillFile = path.join(targetDir, "SKILL.md");
+                // Read content
+                let content = fs.readFileSync(skillFile, "utf-8");
+
+                // Check if starts with YAML frontmatter
+                if (!content.trim().startsWith("---")) {
+                    const header = `---
+                name: ${finalName}
+                description: ${finalName}
+                ---
+                `;
+                    if (LOG_ENABLE) {
+                        console.log(`Append Yaml format to output Content to skillFile ${skillFile}`)
+                    }
+                    content = header + content;
+                    fs.writeFileSync(skillFile, content, "utf-8");
+                }
+
+                results.push({
+                    name: finalName,
+                    dir: targetDir,
+                });
+            }
+        }
+    }
+
+    walk(root);
+    return results;
+}
+
 
 function parseGitHubSource(input: string): { cloneUrl: string; subPath?: string; branch?: string } | null {
     if (input.startsWith('https://github.com/')) {
@@ -401,14 +511,16 @@ function copySkillDir(sourceDir: string, targetDir: string) {
     fs.cpSync(sourceDir, targetDir, { recursive: true });
 }
 
-async function handleAdd(options: { source?: string; skill?: string[]; agent?: string[]; global?: boolean }) {
+
+
+async function handleSkillsAdd(options: { source?: string; skill?: string[]; agent?: string[]; global?: boolean }) {
     const source = options.source;
     if (!source) {
         console.error("\n❌ Error: 'add' command requires a source path or GitHub URL.");
         process.exit(1);
         return;
     }
-
+    console.log("INFO: Staring to fetch skills...")
     const resolved = resolveSkillSource(source);
     const skills = discoverSkills(resolved.root);
     if (skills.length === 0) {
@@ -449,6 +561,1053 @@ async function handleAdd(options: { source?: string; skill?: string[]; agent?: s
     }
 
     resolved.cleanup?.();
+}
+
+type SkillMetadata = { name: string; description?: string; path: string; folder: string };
+
+function readSkillMetadata(skillDir: string): SkillMetadata {
+    const folder = path.basename(skillDir);
+    const skillFile = path.join(skillDir, 'SKILL.md');
+    let name = folder;
+    let description: string | undefined;
+
+    if (fs.existsSync(skillFile)) {
+        const content = fs.readFileSync(skillFile, 'utf8');
+        const meta = parseSkillFrontmatter(content);
+        name = meta.name?.trim() || name;
+        description = meta.description?.trim() || extractDescriptionFromMarkdown(content);
+    }
+    return { name, description, path: skillFile, folder };
+}
+
+async function handleSkillsList(options: { agent?: string[]; global?: boolean; logDir?: string }) {
+    const agents = options.agent?.length ? resolveAgents(options.agent) : resolveAgents(DEFAULT_AGENT_IDS);
+    if (agents.length === 0) {
+        console.error('\n❌ Error: No target agents resolved.');
+        process.exit(1);
+    }
+
+    const logDir = getLogDir(options.logDir);
+    const stats = buildSkillStats(loadLogs(logDir));
+    const rows: string[][] = [];
+
+    for (const agent of agents) {
+        const baseDir = getAgentInstallPath(agent, Boolean(options.global));
+        if (!fs.existsSync(baseDir)) {
+            continue;
+        }
+
+        const skillDirs = fs.readdirSync(baseDir, { withFileTypes: true })
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => path.join(baseDir, entry.name));
+
+        skillDirs.sort().forEach((dir) => {
+            const info = readSkillMetadata(dir);
+            const stat = stats.get(info.folder);
+            const avg = stat && stat.ratingCount > 0 ? (stat.ratingSum / stat.ratingCount).toFixed(2) : '-';
+            const levelSummary = stat ? formatLevelSummary(stat.levels) : '-';
+            rows.push([
+                agent.id,
+                info.folder,
+                // info.description || '-',
+                shortenPath(dir),
+                avg === '-' ? '-' : green(avg),
+                levelSummary === '-' ? '-' : green(levelSummary)
+            ]);
+        });
+    }
+
+    if (rows.length === 0) {
+        console.log('\nNo skills found.');
+        return;
+    }
+    console.log(formatTable(['agent', 'skill_id', 'path', 'score', 'level'], rows));
+    // console.log(formatTable(['agent', 'skill_id', 'description', 'path', 'score', 'level'], rows));
+}
+
+type SkillLogEntry = {
+    log_id: string;
+    skill_id: string;
+    input?: string;
+    output?: string;
+    rating?: number;
+    level?: string;
+    created_at?: string;
+    [key: string]: any;
+};
+
+function getLogDir(custom?: string): string {
+    if (custom) return path.resolve(custom);
+    ensureDir(SKILL_LOG_DIR_LOCAL);
+    return SKILL_LOG_DIR_LOCAL;
+}
+
+function loadLogs(logDir: string): SkillLogEntry[] {
+    ensureDir(logDir);
+    const entries: SkillLogEntry[] = [];
+    const files = fs.readdirSync(logDir).filter((f) => f.endsWith('.json'));
+    for (const file of files) {
+        const full = path.join(logDir, file);
+        try {
+            const parsed = JSON.parse(fs.readFileSync(full, 'utf8')) as SkillLogEntry;
+            entries.push(parsed);
+        } catch {
+            console.warn(`Skipping invalid log file: ${full}`);
+        }
+    }
+    return entries;
+}
+
+function writeLog(logDir: string, entry: SkillLogEntry) {
+    ensureDir(logDir);
+    const target = path.join(logDir, `${entry.log_id}.json`);
+    fs.writeFileSync(target, JSON.stringify(entry, null, 2), 'utf8');
+    console.log(`\n✅ Saved log to ${target}`);
+}
+
+async function handleSkillsLog(skillName: string, options: Record<string, any>) {
+    if (!skillName) {
+        console.error('\n❌ Error: Skill name/id is required for logging.');
+        process.exit(1);
+    }
+    const logDir = getLogDir(options.logDir);
+    const payloadRaw = options.data;
+    if (!payloadRaw) {
+        console.error('\n❌ Error: --data <json> is required.');
+        process.exit(1);
+    }
+
+    let payload: Record<string, any>;
+    try {
+        payload = JSON.parse(payloadRaw);
+    } catch (e: any) {
+        console.error(`\n❌ Error: invalid JSON for --data: ${e.message}`);
+        process.exit(1);
+        return;
+    }
+
+    const logId = payload.log_id || randomUUID();
+    const entry: SkillLogEntry = {
+        log_id: logId,
+        skill_id: skillName,
+        input: payload.input,
+        output: payload.output,
+        meta: payload.meta,
+        created_at: new Date().toISOString()
+    };
+
+    writeLog(logDir, entry);
+}
+
+function resolveLevelsFile(custom?: string): string | null {
+    const candidates = custom
+        ? [custom]
+        : [
+            path.join(SKILL_LEVELS_DIR_LOCAL, 'combined_levels.json'),
+            path.join(SKILL_LEVELS_DIR_GLOBAL, 'combined_levels.json'),
+            path.join(SKILL_LEVELS_DIR_LOCAL, 'software_engineer_google_levels.json'),
+            path.join(SKILL_LEVELS_DIR_GLOBAL, 'software_engineer_google_levels.json'),
+            path.join(SKILL_LEVELS_DIR_LOCAL, 'software_engineer_meta_levels.json'),
+            path.join(SKILL_LEVELS_DIR_GLOBAL, 'software_engineer_meta_levels.json')
+        ];
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    return null;
+}
+
+function loadLevelDescriptions(levelFile?: string): any | null {
+    const resolved = resolveLevelsFile(levelFile);
+    if (!resolved) {
+        return null;
+    }
+    try {
+        return JSON.parse(fs.readFileSync(resolved, 'utf8'));
+    } catch {
+        console.warn(`Unable to parse levels file at ${resolved}`);
+        return null;
+    }
+}
+
+const DEFAULT_EVAL_PROMPT = 'You are an evaluator of skill performance. Score each example from 0.0 to 1.0 and assign a level based on benchmarks. Return JSON only.';
+const BENCHMARK_TOP_K = 3;
+
+function benchmarkKey(obj: any): string {
+    if (!obj || typeof obj !== 'object') return '';
+    const domains = Object.keys(obj);
+    if (domains.length === 0) return '';
+    const domain = domains[0];
+    const companies = obj[domain] && typeof obj[domain] === 'object' ? Object.keys(obj[domain]) : [];
+    const company = companies[0] || '';
+    return [domain, company].filter(Boolean).join('_').toLowerCase();
+}
+
+function normalizeBenchmarks(skillId: string, raw: any): any[] {
+    const base: any[] = !raw ? [] : Array.isArray(raw) ? raw : typeof raw === 'object' ? [raw] : [];
+    const skill = (skillId || '').toLowerCase();
+    const scored = base.map((item, idx) => {
+        const key = benchmarkKey(item);
+        let score = 0;
+        if (key && skill.includes(key)) {
+            score += 2;
+        } else {
+            const parts = key.split(/[_\\-\\s\\/]+/).filter(Boolean);
+            for (const part of parts) {
+                if (part && skill.includes(part)) {
+                    score += 1;
+                }
+            }
+        }
+        return { item, score, idx };
+    });
+    scored.sort((a, b) => b.score - a.score || a.idx - b.idx);
+    return scored.slice(0, BENCHMARK_TOP_K).map((s) => s.item);
+}
+
+async function handleSkillsRatePrepare(options: { skill_id?: string; prompt?: string; benchmark?: string; logDir?: string }) {
+    const skillId = options.skill_id;
+    if (!skillId) {
+        console.error('\n❌ Error: --skill_id is required.');
+        process.exit(1);
+    }
+    const logDir = getLogDir(options.logDir);
+    const logs = loadLogs(logDir).filter((l) => l.skill_id === skillId);
+    if (logs.length === 0) {
+        console.error(`\n❌ Error: No logs found for skill '${skillId}' in ${logDir}.`);
+        process.exit(1);
+    }
+
+    const levelsData = loadLevelDescriptions(options.benchmark);
+    const benchmarks = normalizeBenchmarks(skillId, levelsData).slice(0, BENCHMARK_TOP_K);
+    const payload = {
+        skill_id: skillId,
+        benchmarks,
+        logs: logs.map(({ log_id, input, output }) => ({ log_id, input, output })),
+        instructions: options.prompt || DEFAULT_EVAL_PROMPT
+    };
+    console.log(JSON.stringify(payload, null, 2));
+}
+
+async function handleSkillsRateApply(options: { skill_id?: string; result?: string; logDir?: string }) {
+    const skillId = options.skill_id;
+    if (!skillId) {
+        console.error('\n❌ Error: --skill_id is required.');
+        process.exit(1);
+    }
+    if (!options.result) {
+        console.error('\n❌ Error: --result <json> is required.');
+        process.exit(1);
+    }
+    let parsed: any;
+    try {
+        parsed = JSON.parse(options.result);
+    } catch (e: any) {
+        console.error(`\n❌ Error: invalid JSON for --result: ${e.message}`);
+        process.exit(1);
+    }
+    const results: any[] = Array.isArray(parsed?.results) ? parsed.results : [];
+    if (results.length === 0) {
+        console.error('\n❌ Error: --result must contain a non-empty "results" array.');
+        process.exit(1);
+    }
+
+    const logDir = getLogDir(options.logDir);
+    const logs = loadLogs(logDir).filter((l) => l.skill_id === skillId);
+    const byId = new Map(logs.map((l) => [l.log_id, l]));
+
+    let updated = 0;
+    const missing: string[] = [];
+    for (const item of results) {
+        const id = item?.log_id;
+        if (!id || !byId.has(id)) {
+            missing.push(String(id || 'unknown'));
+            continue;
+        }
+        const entry = byId.get(id) as SkillLogEntry;
+        if (item.rating !== undefined) {
+            entry.rating = Number(item.rating);
+        }
+        if (item.level !== undefined) {
+            entry.level = String(item.level);
+        }
+        const target = path.join(logDir, `${entry.log_id}.json`);
+        fs.writeFileSync(target, JSON.stringify(entry, null, 2), 'utf8');
+        updated += 1;
+    }
+
+    console.log(JSON.stringify({ status: 'success', updated, missing }, null, 2));
+}
+
+const ANSI_REGEX = /\x1b\[[0-9;]*m/g;
+const green = (text: string) => `\x1b[32m${text}\x1b[0m`;
+
+function stripAnsi(text: string): string {
+    return text.replace(ANSI_REGEX, '');
+}
+
+function shortenPath(p: string): string {
+    const cwd = process.cwd();
+    const home = os.homedir();
+    const relCwd = path.relative(cwd, p) || '.';
+    if (!relCwd.startsWith('..')) return relCwd;
+    const relHome = path.relative(home, p);
+    if (!relHome.startsWith('..')) return path.join('~', relHome);
+    return relCwd;
+}
+
+function formatTable(headers: string[], rows: string[][]): string {
+    const colWidths = headers.map((h, idx) =>
+        Math.max(stripAnsi(h).length, ...rows.map((row) => stripAnsi(row[idx] ?? '').length))
+    );
+
+    const pad = (value: string, width: number) => value + ' '.repeat(Math.max(0, width - stripAnsi(value).length));
+
+    const headerLine = headers.map((h, i) => pad(h, colWidths[i])).join('  ');
+    const divider = colWidths.map((w) => '-'.repeat(w)).join('  ');
+    const body = rows.map((row) => row.map((v, i) => pad(v, colWidths[i])).join('  '));
+
+    return [headerLine, divider, ...body].join('\n');
+}
+
+function formatLevelSummary(levelCounts: Map<string, number>): string {
+    if (levelCounts.size === 0) return '-';
+    const entries = Array.from(levelCounts.entries()).sort((a, b) => {
+        if (b[1] !== a[1]) return b[1] - a[1];
+        return a[0].localeCompare(b[0]);
+    });
+    const total = entries.reduce((sum, [, count]) => sum + count, 0) || 1;
+    if (entries.length === 1) {
+        return entries[0][0];
+    }
+    return entries
+        .map(([level, count]) => `${level}(${Math.round((count / total) * 100)}%)`)
+        .join(', ');
+}
+
+type SkillStats = { run_times: number; ratingSum: number; ratingCount: number; levels: Map<string, number> };
+
+function buildSkillStats(logs: SkillLogEntry[]): Map<string, SkillStats> {
+    const stats = new Map<string, SkillStats>();
+
+    for (const log of logs) {
+        const key = log.skill_id;
+        if (!key) continue;
+        if (!stats.has(key)) {
+            stats.set(key, { run_times: 0, ratingSum: 0, ratingCount: 0, levels: new Map() });
+        }
+        const entry = stats.get(key)!;
+        entry.run_times += 1;
+        if (typeof log.rating === 'number' && !Number.isNaN(log.rating)) {
+            entry.ratingSum += Number(log.rating);
+            entry.ratingCount += 1;
+        }
+        if (log.level) {
+            entry.levels.set(log.level, (entry.levels.get(log.level) || 0) + 1);
+        }
+    }
+
+    return stats;
+}
+
+async function handleSkillsRateShow(options: { skill_id?: string; logDir?: string }) {
+    const logDir = getLogDir(options.logDir);
+    const logs = loadLogs(logDir).filter((l) => !options.skill_id || l.skill_id === options.skill_id);
+
+    if (logs.length === 0) {
+        const target = options.skill_id ? ` for skill '${options.skill_id}'` : '';
+        console.error(`\n❌ Error: No logs found${target} in ${logDir}.`);
+        process.exit(1);
+    }
+
+    const stats = buildSkillStats(logs);
+
+    const rows = Array.from(stats.entries())
+        .map(([skill_id, info]) => {
+            const avg = info.ratingCount > 0 ? (info.ratingSum / info.ratingCount).toFixed(2) : '-';
+            const levelSummary = formatLevelSummary(info.levels);
+            return [
+                skill_id,
+                String(info.run_times),
+                avg === '-' ? '-' : green(avg),
+                levelSummary === '-' ? '-' : green(levelSummary)
+            ];
+        })
+        .sort((a, b) => a[0].localeCompare(b[0]));
+
+    console.log(formatTable(['skill_id', 'run_times', 'score', 'level'], rows));
+}
+
+// --- Hints Utilities ---
+
+type HintItem = {
+    cli: string;
+    hint?: string;
+};
+
+type HintsConfig = Record<string, { hints: HintItem[] }>;
+
+type TrieNode = {
+    children: Map<string, TrieNode>;
+    values: Set<string>;
+};
+
+function levenshteinDistance(a: string, b: string): number {
+    const m = a.length;
+    const n = b.length;
+    if (m === 0) return n;
+    if (n === 0) return m;
+    const dp: number[] = new Array(n + 1);
+    for (let j = 0; j <= n; j++) {
+        dp[j] = j;
+    }
+    for (let i = 1; i <= m; i++) {
+        let prev = dp[0];
+        dp[0] = i;
+        for (let j = 1; j <= n; j++) {
+            const temp = dp[j];
+            if (a[i - 1] === b[j - 1]) {
+                dp[j] = prev;
+            } else {
+                dp[j] = Math.min(prev + 1, dp[j] + 1, dp[j - 1] + 1);
+            }
+            prev = temp;
+        }
+    }
+    return dp[n];
+}
+
+function tokenize(text: string): string[] {
+    return text
+        .toLowerCase()
+        .split(/[^a-z0-9]+/g)
+        .map((token) => token.trim())
+        .filter(Boolean);
+}
+
+function isPlaceholder(token: string): boolean {
+    return (token.startsWith('<') && token.endsWith('>')) || (token.startsWith('[') && token.endsWith(']'));
+}
+
+function isOptionalPlaceholder(token: string): boolean {
+    return token.startsWith('[') && token.endsWith(']');
+}
+
+function hintMatchesCommand(hintCli: string, commandArgs: string[]): boolean {
+    const hintTokens = hintCli.trim().split(/\s+/).filter(Boolean);
+    const cmdTokens = commandArgs;
+    let i = 0;
+    let j = 0;
+    while (i < hintTokens.length && j < cmdTokens.length) {
+        const hintToken = hintTokens[i];
+        const cmdToken = cmdTokens[j];
+        if (isPlaceholder(hintToken)) {
+            if (isOptionalPlaceholder(hintToken)) {
+                // Optional placeholder: consume if token exists, else skip
+                i += 1;
+                if (cmdToken) {
+                    j += 1;
+                }
+            } else {
+                // Required placeholder: must consume one token
+                i += 1;
+                j += 1;
+            }
+            continue;
+        }
+        if (hintToken !== cmdToken) {
+            return false;
+        }
+        i += 1;
+        j += 1;
+    }
+
+    // Consume remaining optional placeholders
+    while (i < hintTokens.length && isOptionalPlaceholder(hintTokens[i])) {
+        i += 1;
+    }
+
+    return i === hintTokens.length && j === cmdTokens.length;
+}
+
+function fuzzyScore(query: string, candidate: string): number {
+    const q = query.toLowerCase();
+    const c = candidate.toLowerCase();
+    if (!q) return 0;
+    if (c.includes(q)) {
+        return 1.0 - (c.indexOf(q) / Math.max(1, c.length));
+    }
+    const dist = levenshteinDistance(q, c);
+    const maxLen = Math.max(q.length, c.length, 1);
+    const editScore = 1 - dist / maxLen;
+
+    const qTokens = tokenize(q);
+    const cTokens = tokenize(c);
+    const tokenMatches = qTokens.filter((t) => cTokens.includes(t)).length;
+    const tokenScore = qTokens.length > 0 ? tokenMatches / qTokens.length : 0;
+
+    return 0.7 * editScore + 0.3 * tokenScore;
+}
+
+function createTrie(): TrieNode {
+    return { children: new Map(), values: new Set() };
+}
+
+function insertTrie(trie: TrieNode, key: string, value: string) {
+    let node = trie;
+    const normalized = key.toLowerCase();
+    for (const ch of normalized) {
+        const next = node.children.get(ch);
+        if (next) {
+            node = next;
+        } else {
+            const created = createTrie();
+            node.children.set(ch, created);
+            node = created;
+        }
+        node.values.add(value);
+    }
+}
+
+function searchTrie(trie: TrieNode, prefix: string, limit: number): string[] {
+    let node: TrieNode | undefined = trie;
+    const normalized = prefix.toLowerCase();
+    for (const ch of normalized) {
+        node = node.children.get(ch);
+        if (!node) {
+            return [];
+        }
+    }
+    const values = Array.from(node.values);
+    values.sort((a, b) => a.localeCompare(b));
+    return values.slice(0, limit);
+}
+
+function mergeHints(target: HintsConfig, source: HintsConfig): HintsConfig {
+    for (const [id, entry] of Object.entries(source)) {
+        if (!entry || !Array.isArray(entry.hints)) {
+            continue;
+        }
+        if (!target[id]) {
+            target[id] = { hints: [] };
+        }
+        const existing = target[id].hints;
+        for (const hint of entry.hints) {
+            if (!hint || typeof hint.cli !== 'string') {
+                continue;
+            }
+            const cli = hint.cli.trim();
+            if (!cli) {
+                continue;
+            }
+            const normalizedHint = (hint.hint || '').trim();
+            const existingIndex = existing.findIndex((item) => item.cli.trim() === cli);
+            if (existingIndex === -1) {
+                existing.push({ cli, hint: normalizedHint || undefined });
+            } else if (!existing[existingIndex].hint && normalizedHint) {
+                existing[existingIndex].hint = normalizedHint;
+            }
+        }
+    }
+    return target;
+}
+
+function loadHintsFile(filePath: string): HintsConfig {
+    if (!fs.existsSync(filePath)) {
+        return {};
+    }
+    try {
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+            return parsed as HintsConfig;
+        }
+    } catch {
+        return {};
+    }
+    return {};
+}
+
+function writeHintsFile(filePath: string, hints: HintsConfig) {
+    ensureDir(path.dirname(filePath));
+    fs.writeFileSync(filePath, JSON.stringify(hints, null, 2));
+}
+
+function findBundledHintsDir(): string | null {
+    const candidates = [
+        path.resolve(CLI_DIR, 'data', 'config', 'hints'),
+        path.resolve(CLI_DIR, '..', 'data', 'config', 'hints')
+    ];
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    return null;
+}
+
+function findBundledLevelsDir(): string | null {
+    const candidates = [
+        path.resolve(CLI_DIR, 'data', 'config', 'levels'),
+        path.resolve(CLI_DIR, '..', 'data', 'config', 'levels')
+    ];
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    return null;
+}
+
+async function loadBundledHints(): Promise<HintsConfig> {
+    const hintsDir = findBundledHintsDir();
+    if (!hintsDir) {
+        return {};
+    }
+    const basePath = path.join(hintsDir, 'base_hints.json');
+    const contribDir = path.join(hintsDir, 'contrib');
+    const merged: HintsConfig = {};
+
+    if (fs.existsSync(basePath)) {
+        mergeHints(merged, loadHintsFile(basePath));
+    }
+    if (fs.existsSync(contribDir)) {
+        const entries = fs.readdirSync(contribDir, { withFileTypes: true });
+        for (const entry of entries) {
+            if (!entry.isFile() || !entry.name.endsWith('.json')) {
+                continue;
+            }
+            const filePath = path.join(contribDir, entry.name);
+            mergeHints(merged, loadHintsFile(filePath));
+        }
+    }
+    return merged;
+}
+
+function getHintsPath(useGlobal: boolean): string {
+    if (useGlobal) {
+        return path.join(AGTM_GLOBAL_DIR, 'hints.json');
+    }
+    return path.join(AGTM_LOCAL_DIR, 'hints.json');
+}
+
+function getLegacyHintsPath(useGlobal: boolean): string {
+    if (useGlobal) {
+        return path.join(os.homedir(), '.agent', 'hints.json');
+    }
+    return path.join(process.cwd(), '.agent', 'hints.json');
+}
+
+/*True: useGlobal, load from Hints path in package, userGlobal False, use the cache folder .agents/hints.json*/
+function loadCombinedHints(useGlobal: boolean): HintsConfig {
+    const combined: HintsConfig = {};
+    const globalHints = loadHintsFile(getHintsPath(true));
+    const localHints = loadHintsFile(getHintsPath(false));
+    mergeHints(combined, globalHints);
+    mergeHints(combined, localHints);
+    mergeHints(combined, loadHintsFile(getLegacyHintsPath(true)));
+    mergeHints(combined, loadHintsFile(getLegacyHintsPath(false)));
+    if (useGlobal) {
+        return globalHints;
+    }
+    return combined;
+}
+
+function buildIdTrie(hints: HintsConfig): TrieNode {
+    const trie = createTrie();
+    for (const id of Object.keys(hints)) {
+        insertTrie(trie, id, id);
+    }
+    return trie;
+}
+
+function buildCliTrie(hints: HintItem[]): TrieNode {
+    const trie = createTrie();
+    for (const item of hints) {
+        if (item.cli) {
+            insertTrie(trie, item.cli, item.cli);
+        }
+    }
+    return trie;
+}
+
+function filterCliHints(hints: HintItem[], query: string, limit: number): HintItem[] {
+    if (!hints || hints.length === 0) {
+        return [];
+    }
+    const trimmed = query.trim().toLowerCase();
+    if (trimmed) {
+        const scored = hints
+            .map((item) => ({ item, score: fuzzyScore(trimmed, item.cli) }))
+            .filter((entry) => entry.score > 0);
+        scored.sort((a, b) => b.score - a.score || a.item.cli.localeCompare(b.item.cli));
+        return scored.slice(0, limit).map((entry) => entry.item);
+    }
+    const sorted = [...hints].sort((a, b) => a.cli.localeCompare(b.cli));
+    return sorted.slice(0, limit);
+}
+
+async function promptSelection(prompt: string, options: string[]): Promise<string | null> {
+    if (!process.stdin.isTTY) {
+        return options.length > 0 ? options[0] : null;
+    }
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+        const answerRaw = await rl.question(prompt);
+        const answer = answerRaw.trim();
+        if (answer === '') {
+            return options.length > 0 ? options[0] : null;
+        }
+        if (/^\d+$/.test(answer)) {
+            const index = Number(answer) - 1;
+            if (index >= 0 && index < options.length) {
+                return options[index];
+            }
+        }
+        return answer;
+    } finally {
+        rl.close();
+    }
+}
+
+async function promptCommandLine(promptText: string): Promise<string | null> {
+    if (!process.stdin.isTTY) {
+        return null;
+    }
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+        const answerRaw = await rl.question(promptText);
+        const answer = answerRaw.trim();
+        return answer || null;
+    } finally {
+        rl.close();
+    }
+}
+
+async function selectSkillId(hints: HintsConfig, input?: string, limit = 5): Promise<string | null> {
+    const ids = Object.keys(hints);
+    if (ids.length === 0) {
+        return null;
+    }
+    if (input && hints[input]) {
+        return input;
+    }
+    const trie = buildIdTrie(hints);
+    const prefix = input || '';
+    let suggestions = searchTrie(trie, prefix, limit);
+    if (suggestions.length === 0 && prefix) {
+        const scored = ids
+            .map((id) => ({ id, score: fuzzyScore(prefix, id) }))
+            .filter((entry) => entry.score > 0);
+        scored.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+        suggestions = scored.slice(0, limit).map((entry) => entry.id);
+    }
+    if (suggestions.length === 0) {
+        return null;
+    }
+    console.log('\nSkill ID suggestions:');
+    suggestions.forEach((value, index) => {
+        console.log(`  ${index + 1}. ${value}`);
+    });
+    const selected = await promptSelection('\nSelect skill id (number or id): ', suggestions);
+
+    console.log(`Selected Skill/Cli is ${selected}`);
+
+    if (!selected) {
+        return null;
+    }
+
+    // console.log(`DEBUG: hints loaded is ${hints}`)
+
+    if (hints[selected]) {
+        return selected;
+    }
+    if (suggestions.includes(selected)) {
+        return selected;
+    }
+    console.log(`WARNING: Id ${selected} is not found`)
+    return null;
+}
+
+async function selectCliHint(hints: HintItem[], query?: string, limit = 5): Promise<HintItem | null> {
+    if (!hints || hints.length === 0) {
+        return null;
+    }
+    const suggestions = filterCliHints(hints, query || '', limit);
+    if (suggestions.length === 0) {
+        return null;
+    }
+    console.log('\nCommand hints:');
+    suggestions.forEach((item, index) => {
+        const hintText = item.hint ? ` # ${item.hint}` : '';
+        console.log(`  ${index + 1}. ${item.cli}${hintText}`);
+    });
+    const options = suggestions.map((item) => item.cli);
+    const selected = await promptSelection('\nSelect command (number or input custom): ', options);
+    if (!selected) {
+        return null;
+    }
+    const match = suggestions.find((item) => item.cli === selected);
+    if (match) {
+        return match;
+    }
+    return { cli: selected };
+}
+
+
+/* '.agent/hints.json' local folder  */
+async function handleSetup(options: { hint?: boolean; levels?: boolean; global?: boolean }) {
+    const useGlobal = Boolean(options.global);
+
+    if (!options.hint && !options['levels']) {
+        console.error("\n❌ Error: 'setup' command supports --hint and/or --levels.");
+        process.exit(1);
+    }
+
+    if (options.hint) {
+        const bundled = await loadBundledHints();
+        const targetPath = getHintsPath(useGlobal);
+        const legacyPath = getLegacyHintsPath(useGlobal);
+        const existing = loadHintsFile(targetPath);
+        const merged: HintsConfig = {};
+        mergeHints(merged, bundled);
+        mergeHints(merged, existing);
+        writeHintsFile(targetPath, merged);
+        if (fs.existsSync(path.dirname(legacyPath))) {
+            writeHintsFile(legacyPath, merged);
+        }
+        console.log(`\n✅ Hints cache updated at ${targetPath}`);
+    }
+
+    if (options['levels']) {
+        const bundledLevelsDir = findBundledLevelsDir();
+        if (!bundledLevelsDir) {
+            console.error('\n❌ Error: No bundled levels directory found.');
+            process.exit(1);
+        }
+        const targetDir = useGlobal ? SKILL_LEVELS_DIR_GLOBAL : SKILL_LEVELS_DIR_LOCAL;
+        ensureDir(targetDir);
+        fs.cpSync(bundledLevelsDir, targetDir, { recursive: true });
+        console.log(`\n✅ Levels copied to ${targetDir}`);
+    }
+}
+
+async function handleRun(
+    idArg?: string,
+    commandArgs: string[] = [],
+    options: { print?: boolean; dryRun?: boolean; mode?: string ; autoSetup?: boolean} = {}
+) {
+    const isAgent = (options.mode || 'human').toLowerCase() === MODE_AGENT;
+    // first load local hints
+    // 1. Install Local and Global Cache
+    let hints = loadCombinedHints(false);
+    let hasHints = Object.keys(hints).length > 0;
+    const shouldAutoSetup = options.autoSetup ?? true;
+    let runtimeHints = null;
+
+    // 2. If no Cache is found, copy global base_hint.json, convert to local /.agents/hints.json
+    if (!hasHints) {
+        if (shouldAutoSetup) {
+            console.log("No hints data found. Please complete the first setup.");
+            await handleSetup({ hint: true, global: false });
+            hints = loadCombinedHints(false);
+            hasHints = Object.keys(hints).length > 0;
+        } else {
+            console.error('\nError: No hints data found. Please complete the first setup');
+            console.error('👉 Run `agtm setup --hint` first.');
+            process.exit(1);
+        }
+    }
+
+    if (isAgent) {
+        if (!hasHints) {
+            runtimeHints = await loadBundledHints();
+        }
+        const activeHints = hasHints ? hints : (runtimeHints || {});
+        const ids = Object.keys(activeHints);
+        if (ids.length === 0) {
+            console.error('\n❌ Error: No hints available.');
+            process.exit(1);
+        }
+
+        if (!idArg || !activeHints[idArg]) {
+            const query = idArg || '';
+            const trie = buildIdTrie(activeHints);
+            let suggestions = searchTrie(trie, query, 2);
+            if (suggestions.length === 0 && query) {
+                const scored = ids
+                    .map((id) => ({ id, score: fuzzyScore(query, id) }))
+                    .filter((entry) => entry.score > 0);
+                scored.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+                suggestions = scored.slice(0, 2).map((entry) => entry.id);
+            }
+            console.log('\nSkill ID suggestions:');
+            suggestions.forEach((value, index) => {
+                console.log(`  ${index + 1}. ${value}`);
+                const entry = activeHints[value];
+                if (entry?.hints?.length) {
+                    const preview = entry.hints.slice(0, 2).map((h) => `${h.cli}${h.hint ? ` # ${h.hint}` : ''}`);
+                    preview.forEach((line) => console.log(`     - ${line}`));
+                }
+            });
+            process.exit(1);
+        }
+
+        let finalCommandArgs = commandArgs;
+        if (finalCommandArgs.length > 0 && activeHints[finalCommandArgs[0]]) {
+            idArg = finalCommandArgs[0];
+            finalCommandArgs = finalCommandArgs.slice(1);
+        }
+        if (finalCommandArgs.length > 0 && finalCommandArgs[0] === idArg) {
+            finalCommandArgs = finalCommandArgs.slice(1);
+        }
+
+        const hintEntry = activeHints[idArg];
+        if (!finalCommandArgs || finalCommandArgs.length === 0) {
+            console.log('\nCommand hints:');
+            hintEntry?.hints?.slice(0, 5).forEach((item, index) => {
+                const hintText = item.hint ? ` # ${item.hint}` : '';
+                console.log(`  ${index + 1}. ${item.cli}${hintText}`);
+            });
+            process.exit(1);
+        }
+
+        if (hintEntry?.hints?.length) {
+            const exact = hintEntry.hints.some((h) => hintMatchesCommand(h.cli, finalCommandArgs));
+            if (!exact) {
+                const suggestions = filterCliHints(hintEntry.hints, finalCommandArgs.join(' ').trim(), 5);
+                console.log('\nCommand hints:');
+                suggestions.forEach((item, index) => {
+                    const hintText = item.hint ? ` # ${item.hint}` : '';
+                    console.log(`  ${index + 1}. ${item.cli}${hintText}`);
+                });
+                process.exit(1);
+            }
+        }
+
+        const [command, ...args] = finalCommandArgs;
+        const printable = `agtm run ${idArg} ${finalCommandArgs.join(' ')}`.trim();
+        console.log(`\u001b[32m${printable}\u001b[0m`);
+        if (options.print || options.dryRun) {
+            return;
+        }
+        const child = spawn(command, args, { stdio: 'inherit' });
+        child.on('error', (err: NodeJS.ErrnoException) => {
+            if (err.code === 'ENOENT') {
+                console.error(`\n❌ Error: Command not found: ${command}`);
+                process.exit(1);
+            }
+            console.error(`\n❌ Error: Failed to run command '${command}': ${err.message}`);
+            process.exit(1);
+        });
+        child.on('exit', (code) => {
+            if (code && code !== 0) {
+                process.exit(code);
+            }
+        });
+    } else {
+        if (LOG_ENABLE) {
+            console.log(`DEBUG: Entering Human Mode | idArg ${idArg} | commandArgs ${commandArgs} | options ${options} | hasHints ${hasHints} | hints ${hints}`);
+        }
+        // human mode with pause for cli input
+        if (!idArg) {
+            if (!hasHints) {
+                console.error('\n❌ Error: No hints cache found. Run `agtm setup --hint` first.');
+                process.exit(1);
+            }
+            const selected = await selectSkillId(hints);
+            if (!selected) {
+                console.error('\n❌ Error: No skill id selected.');
+                process.exit(1);
+            }
+            idArg = selected;
+        } else if (hasHints && !hints[idArg]) {
+            const selected = await selectSkillId(hints, idArg);
+            if (selected) {
+                idArg = selected;
+            }
+        }
+
+        let finalCommandArgs = commandArgs;
+        if (hasHints && idArg && finalCommandArgs.length > 0 && hints[finalCommandArgs[0]]) {
+            idArg = finalCommandArgs[0];
+            finalCommandArgs = finalCommandArgs.slice(1);
+        }
+
+        if (hasHints && idArg && finalCommandArgs.length > 0 && finalCommandArgs[0] === idArg) {
+            finalCommandArgs = finalCommandArgs.slice(1);
+        }
+
+        if (!hasHints) {
+            runtimeHints = await loadBundledHints();
+        }
+        let hintEntry = hasHints ? hints[idArg] : undefined;
+        if (!hintEntry && runtimeHints) {
+            hintEntry = runtimeHints[idArg];
+        }
+
+        if (LOG_ENABLE) {
+            console.log(`DEBUG: Entering Human Mode | finalCommandArgs ${finalCommandArgs} | hintEntry ${hintEntry}`);
+        }
+
+        if (!finalCommandArgs || finalCommandArgs.length === 0) {
+            let chosen: HintItem | null = null;
+            if (hintEntry?.hints && hintEntry.hints.length > 0) {
+                const query = await promptCommandLine('\nEnter command (leave empty to list hints): ');
+                const searchQuery = query || '';
+                chosen = await selectCliHint(hintEntry.hints, searchQuery);
+            }
+            if (chosen && chosen.cli) {
+                finalCommandArgs = chosen.cli.split(/\s+/).filter(Boolean);
+            } else {
+                const manual = await promptCommandLine('\nEnter command to run: ');
+                if (!manual) {
+                    console.error('\n❌ Error: No command selected.');
+                    process.exit(1);
+                }
+                finalCommandArgs = manual.split(/\s+/).filter(Boolean);
+            }
+        } else if (hintEntry?.hints && hintEntry.hints.length > 0 && finalCommandArgs.length <= 1) {
+            const query = finalCommandArgs.join(' ').trim();
+            const chosen = await selectCliHint(hintEntry.hints, query);
+            if (chosen && chosen.cli) {
+                finalCommandArgs = chosen.cli.split(/\s+/).filter(Boolean);
+            }
+        }
+
+        if (!finalCommandArgs || finalCommandArgs.length === 0) {
+            console.error('\n❌ Error: Missing command to run.');
+            process.exit(1);
+        }
+
+        const finalCommandLine = finalCommandArgs.join(' ');
+        const edited = await promptCommandLine(`\nFinal command [${finalCommandLine}]: `);
+        if (edited && edited.trim()) {
+            finalCommandArgs = edited.split(/\s+/).filter(Boolean);
+        }
+
+        const [command, ...args] = finalCommandArgs;
+        const printable = `agtm run ${idArg} ${finalCommandArgs.join(' ')}`.trim();
+        console.log(`\u001b[32m${printable}\u001b[0m`);
+        if (options.print || options.dryRun) {
+            return;
+        }
+        const child = spawn(command, args, { stdio: 'inherit' });
+        child.on('error', (err: NodeJS.ErrnoException) => {
+            if (err.code === 'ENOENT') {
+                console.error(`\n❌ Error: Command not found: ${command}`);
+                process.exit(1);
+            }
+            console.error(`\n❌ Error: Failed to run command '${command}': ${err.message}`);
+            process.exit(1);
+        });
+        child.on('exit', (code) => {
+            if (code && code !== 0) {
+                process.exit(code);
+            }
+        });
+    }
 }
 
 // --- Command Handlers ---
@@ -621,8 +1780,11 @@ program.command('search')
     .option('--count-per-page <count>', 'Count per page of search results returned.', (value: string) => parseInt(value, 10), 10) // default=10
     .action(handleSearch);
 
-// 3. ADD Command (Skills)
-program.command('add')
+// 3. SKILLS Command
+const skillsCommand = program.command('skills')
+    .description('Manage skills: add, list, rate, log.');
+
+skillsCommand.command('add')
     .description('Download and install skills from a GitHub repo or local path.')
     .argument('<source>', 'GitHub repo URL, owner/repo, or local path')
     .option('-s, --skill <skill>', 'Install a specific skill (repeatable). Use "*" for all skills.', (value: string, prev: string[]) => {
@@ -636,6 +1798,75 @@ program.command('add')
         return list;
     }, [])
     .option('-g, --global', 'Install to global agent directories instead of project paths.')
-    .action((source: string, options: Record<string, any>) => handleAdd({ ...options, source }));
+    .action((source: string, options: Record<string, any>) => handleSkillsAdd({ ...options, source }));
+
+skillsCommand.command('list')
+    .description('List installed skills for detected or specified agents, showing name, description, path, and folder.')
+    .option('-a, --agent <agent>', 'Target specific agents (repeatable). Use "*" for all agents.', (value: string, prev: string[]) => {
+        const list = prev || [];
+        list.push(value);
+        return list;
+    }, [])
+    .option('-g, --global', 'Read from global agent directories instead of project paths.')
+    .option('-d, --log-dir <path>', 'Override log storage directory (default ./.agtm/skills/log)')
+    .action((options: Record<string, any>) => handleSkillsList(options));
+
+skillsCommand.command('log')
+    .description('Append a raw skill execution log entry.')
+    .argument('<skill>', 'Skill name or id')
+    .option('--data <json>', 'Log payload JSON (log_id optional, includes input/output/meta)')
+    .option('-d, --log-dir <path>', 'Override log storage directory (default ./.agtm/skills/log)')
+    .action((skill: string, options: Record<string, any>) => handleSkillsLog(skill, options));
+
+const rateCommand = skillsCommand.command('rate')
+    .description('Prepare or apply external LLM evaluations for skill logs.');
+
+rateCommand.command('prepare')
+    .requiredOption('--skill_id <skill_id>', 'Skill id to evaluate')
+    .option('--prompt <text>', 'Custom evaluation instruction')
+    .option('--benchmark <path>', 'Benchmark levels JSON file')
+    .option('-d, --log-dir <path>', 'Override log storage directory (default ./.agtm/skills/log)')
+    .action((options: Record<string, any>) => handleSkillsRatePrepare(options));
+
+rateCommand.command('apply')
+    .requiredOption('--skill_id <skill_id>', 'Skill id to update')
+    .requiredOption('--result <json>', 'LLM evaluation results JSON')
+    .option('-d, --log-dir <path>', 'Override log storage directory (default ./.agtm/skills/log)')
+    .action((options: Record<string, any>) => handleSkillsRateApply(options));
+
+rateCommand.command('show')
+    .description('Show aggregated run counts and ratings for skills based on logs.')
+    .option('--skill_id <skill_id>', 'Filter by skill id')
+    .option('-d, --log-dir <path>', 'Override log storage directory (default ./.agtm/skills/log)')
+    .action((options: Record<string, any>) => handleSkillsRateShow(options));
+
+skillsCommand.command('rank')
+    .description('Alias for rate prepare (generate evaluation payload).')
+    .requiredOption('--skill_id <skill_id>', 'Skill id to evaluate')
+    .option('--prompt <text>', 'Custom evaluation instruction')
+    .option('--benchmark <path>', 'Benchmark levels JSON file')
+    .option('-d, --log-dir <path>', 'Override log storage directory (default ./.agtm/skills/log)')
+    .action((options: Record<string, any>) => handleSkillsRatePrepare(options));
+
+// 4. SETUP Command (Hints)
+program.command('setup')
+    .description('Setup local caches such as CLI hints.')
+    .option('--hint', 'Build CLI hint cache from bundled hints.')
+    .option('--levels', 'Copy bundled benchmark level files.')
+    .option('-g, --global', 'Write hints to global cache location.')
+    .action((options: { hint?: boolean; levels?: boolean; global?: boolean }) => handleSetup(options));
+
+// 5. RUN Command (Interactive hinting)
+program.command('run')
+    .description('Run a command for a skill id with interactive hints.')
+    .argument('[id]', 'Skill id (owner/repo) or partial match')
+    .argument('[command...]', 'Command to run or query to match hints')
+    .option('--mode <mode>', 'Run mode: human | agent', 'human')
+    .option('--print', 'Print the final command without executing.')
+    .option('--dry-run', 'Alias for --print.')
+    .option('--auto-setup', 'Automatically run setup if no cache found')
+    .action((id: string | undefined, command: string[], options: { print?: boolean; dryRun?: boolean; mode?: string; autoSetup ?: boolean }) =>
+        handleRun(id, command, options)
+    );
 
 program.parse(process.argv);

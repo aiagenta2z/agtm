@@ -21,5 +21,5 @@
     // Tells ts-node to use the module system set above
     // "esm": true
   },
-  "include": ["agtm-cli.ts"]
+  "include": ["agtm-cli.ts", "test/**/*.ts", ".agents/**/*.ts"]
 }

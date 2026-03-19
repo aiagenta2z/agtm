@@ -1,0 +1,42 @@
+{
+  "software-engineering": {
+    "Meta": [
+      {
+        "level": "E3",
+        "title": "Software Engineer",
+        "description": "Entry-level engineer. Contributes to small tasks with guidance and learns systems quickly.",
+        "signals": ["execution", "learning", "basic debugging"]
+      },
+      {
+        "level": "E4",
+        "title": "Software Engineer",
+        "description": "Delivers features independently. Writes reliable, maintainable code.",
+        "signals": ["ownership", "feature delivery", "code reliability"]
+      },
+      {
+        "level": "E5",
+        "title": "Senior Software Engineer",
+        "description": "Leads medium-to-large projects. Improves system performance and mentors others.",
+        "signals": ["project leadership", "impact", "mentorship"]
+      },
+      {
+        "level": "E6",
+        "title": "Staff Software Engineer",
+        "description": "Leads large initiatives across teams. Defines system architecture.",
+        "signals": ["cross-team leadership", "architecture", "execution at scale"]
+      },
+      {
+        "level": "E7",
+        "title": "Senior Staff Software Engineer",
+        "description": "Drives technical direction across an organization.",
+        "signals": ["org-level influence", "strategy", "complex systems"]
+      },
+      {
+        "level": "E8",
+        "title": "Principal Engineer",
+        "description": "Company-level technical leadership and long-term vision.",
+        "signals": ["company impact", "vision", "innovation"]
+      }
+    ]
+  }
+}
