@@ -5,14 +5,14 @@
 
 `agtm` (AI Agent Management CLI) unifies skill management, agent registration, marketplace search, and provider CLI execution. Install skills from GitHub, log and rate skill runs, upload agent metadata to registries, query the public marketplace, and run agent toolchains with fuzzy hints.
 
-Features
+## Features
 
 *`agtm skills`*: Manage Skills, Add Skills, List Skills, Log Skills Performance, Skills performance Evaluator, compare to realworld benchmarks   
 *`agtm upload`*: AI Agent Registry, register local agent meta information of json or yaml format(agent.json/agent.yaml) or sync your github source meta including README.md     
 *`agtm search`*: Search the open source AI Agent Marketplace, including github community, huggingface community, product hunt community, deepnlp ai agent marketplace index, etc     
 *`agtm run`*: Run agent clis, don't need to remember, with the powerful hints and completion ability, just type a few characters and "--hint" will help you complete the command line.   
 
-Furthermore, `agtm` provides memory to track skill outputs and enables performance rating against industry job level benchmarks. This allows you to score each skill execution and assign a professional tier to your AI Agent's capabilities—for example, evaluating its performance as equivalent to that of an L3 or L5 software engineer, marketing prefessional, etc.
+Furthermore, `agtm` provides memory to track skill outputs and enables performance rating against industry job level benchmarks. This allows you to score each skill execution and assign a professional tier to your AI Agent's capabilities—for example, evaluating its performance as equivalent to that of an L3 or L5 software engineer, marketing professional, etc.
 
 ```shell
 skill_id             run_times  score  level
@@ -31,8 +31,8 @@ npm install -g @aiagenta2z/agtm
 
 Setup hint and skills benchmark 
 ```shell
-agtm setup --levels  ## Needed before `agtm rate`, to sync the benchmarks json to local folder 
-agtm setup --hint    ## Needed before `agtm run` 
+npx agtm setup --levels  ## Needed before `agtm rate`, to sync the benchmarks json to local folder 
+npx agtm setup --hint    ## Needed before `agtm run` 
 ```
 
 Agtm CLI Options
@@ -52,27 +52,27 @@ Download and add skills to your agent directory.
 
 #### Usage
 ```
-agtm skills add <unique_id>
-agtm skills add <github_url>
-agtm skills add <github_url> -a <agent_id>
-agtm skills add <owner_id/repo_id> -s <skill_id>
+npx agtm skills add <unique_id>
+npx agtm skills add <github_url>
+npx agtm skills add <github_url> -a <agent_id>
+npx agtm skills add <owner_id/repo_id> -s <skill_id>
 ```
 
 #### Example
 ```
-agtm skills add anthropics/skills -a claude-code  ## install skills only to claude-codex
-agtm skills add msitarzewski/agency-agents
-agtm skills add aiagenta2z/onekey-gateway
-agtm skills add msitarzewski/agency-agents -s academic-anthropologist -a codex
-agtm skills add anthropics/skills -s skill-creator -a claude-code --global
+npx agtm skills add anthropics/skills -a claude-code  ## install skills only to claude-codex
+npx agtm skills add msitarzewski/agency-agents
+npx agtm skills add aiagenta2z/onekey-gateway
+npx agtm skills add msitarzewski/agency-agents -s academic-anthropologist -a codex
+npx agtm skills add anthropics/skills -s skill-creator -a claude-code --global
 ```
 
 ### skills list
 
 #### Usage
 ```
-agtm skills list
-agtm skills list --agent <agent_id> --global
+npx agtm skills list
+npx agtm skills list --agent <agent_id> --global
 ```
 Lists installed skills with `agent`, `skill_id`, `description`, install `path`, average `score`, and aggregated `level` (if ratings exist).
 
@@ -80,9 +80,9 @@ Lists installed skills with `agent`, `skill_id`, `description`, install `path`, 
 
 #### Example
 ```
-agtm skills list
-agtm skills list --agent codex
-agtm skills list --agent claude-code --global
+npx agtm skills list
+npx agtm skills list --agent codex
+npx agtm skills list --agent claude-code --global
 ```
 
 
@@ -90,15 +90,16 @@ agtm skills list --agent claude-code --global
 
 #### Usage
 ```
-agtm skills log <skill_id> --data '<json_payload>'
+npx agtm skills log <skill_id> --data '<json_payload>'
 ```
+
 - Persists a run record at `.agtm/skills/log/<uuid>.json` (or the `--logDir` you supply).
 - `<json_payload>` must contain at least `input` and `output`; optional fields (meta, rating, level) are accepted.
 
 #### Example
 ```
-agtm skills log <skill_id> --data '{"input":"write a website for store","output":"success"}'
-agtm skills log code_success_skills --data '{"input":"generate sql","output":"ok","meta":{"agent":"claude-code"}}'
+npx agtm skills log <skill_id> --data '{"input":"write a website for store","output":"success"}'
+npx agtm skills log code_success_skills --data '{"input":"generate sql","output":"ok","meta":{"agent":"claude-code"}}'
 ```
 
 ### skills rate
@@ -107,14 +108,14 @@ agtm skills log code_success_skills --data '{"input":"generate sql","output":"ok
 
 To use the rate command, have to setup the benchmark levels configuration. save to `./agtm/levels/*.json` files
 ```shell
-agtm setup --levels
+npx agtm setup --levels
 ```
 
 #### Usage
 ```
-agtm skills rate prepare --skill_id <skill_id> --prompt "<eval_prompt>" --benchmark <path/benchmark.json>
-agtm skills rate apply   --skill_id <skill_id> --result '<result_json>'
-agtm skills rate show    --skill_id <skill_id>
+npx agtm skills rate prepare --skill_id <skill_id> --prompt "<eval_prompt>" --benchmark <path/benchmark.json>
+npx agtm skills rate apply   --skill_id <skill_id> --result '<result_json>'
+npx agtm skills rate show    --skill_id <skill_id>
 ```
 - `prepare` exports logs plus the top benchmark slices (e.g., Google SWE L3–L7) for an external evaluator.
 - `apply` writes evaluator outputs (`rating`, `level`) back to each log.
@@ -122,9 +123,9 @@ agtm skills rate show    --skill_id <skill_id>
 
 #### Example
 ```
-agtm skills rate prepare --skill_id code_success_skills --prompt "Evaluate the results" --benchmark path/customized_agent_benchmark.json
-agtm skills rate apply --skill_id code_success_skills --result '{"results":[{"log_id":"3679a3fe-4d97-4eb1-83bc-f83d711be195","rating":0.90,"level":"L4"}]}'
-agtm skills rate show --skill_id code_success_skills
+npx agtm skills rate prepare --skill_id code_success_skills --prompt "Evaluate the results" --benchmark path/customized_agent_benchmark.json
+npx agtm skills rate apply --skill_id code_success_skills --result '{"results":[{"log_id":"3679a3fe-4d97-4eb1-83bc-f83d711be195","rating":0.90,"level":"L4"}]}'
+npx agtm skills rate show --skill_id code_success_skills
 ```
 Sample output:
 ```
@@ -194,9 +195,7 @@ agtm run <provider_unique_id> <agent_cli>
 ### Example 
 
 ```shell
-rockingdingo@rockingdingodeMacBook-Pro skills_cli % agtm run play
-DEBUG: Entering Human Mode | idArg play | commandArgs  | options [object Object] | hasHints true | hints [object Object]
-
+agtm run play
 Skill ID suggestions:
   1. microsoft/playwright-cli
   2. googleworkspace/cli
@@ -258,6 +257,28 @@ export AI_AGENT_MARKETPLACE_ACCESS_KEY="TEST_KEY_AI_AGENT_REGISTRY"
 agtm upload --config ./agent.json --endpoint https://www.deepnlp.org/api/ai_agent_marketplace/registry --schema ./schema.json
 
 agtm upload --config ./agent.json --endpoint https://www.aiagenta2z.com/api/ai_agent_marketplace/registry --schema ./schema.json
+```
+
+
+
+### Skills Agtm-Cli
+
+We provide Skills repo to use in various agents to evaluate skills and run agent hints.
+The skills can be found in ./skills/ folder
+
+| skill | description |
+| ---- | ---- |
+| agent-cli-hint-completion | This skill uses `agtm run --mode agent` to help hint agents clis usage |
+| agent-skills-evaluator | This skill use `agtm skills log` and `agtm skills rate` to track other skills performance from LLM-based evaluator, match to professional Job Level Benchmarks, such as Google L3 level software engineers/ Apple M3 level marketing specialist performance. |
+
+```shell
+npx agtm skills add aiagenta2z/agtm ## install all the skill evaluation and skill cli-hints
+npx agtm skills add aiagenta2z/agtm -s agent-skills-evaluator
+```
+
+```shell
+npx skills add aiagenta2z/agtm ## install all the skill evaluation and skill cli-hints
+npx skills add aiagenta2z/agtm -s agent-skills-evaluator
 ```
 
 ### Contributing

@@ -11,6 +11,8 @@ import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 
+//production setup
+const LOG_ENABLE = false;
 
 // --- Configuration ---
 const BASE_URL = 'https://www.deepnlp.org/api/ai_agent_marketplace';
@@ -22,7 +24,6 @@ const MOCK_RETURN_URL = "https://www.deepnlp.org/store/ai-agent/ai-agent/pub-AI-
 const CLI_DIR = path.dirname(fileURLToPath(import.meta.url));
 const MODE_AGENT = 'agent';
 const MODE_HUMAN = 'human';
-const LOG_ENABLE = true;
 const AGTM_LOCAL_DIR = path.join(process.cwd(), '.agtm');
 const AGTM_GLOBAL_DIR = path.join(os.homedir(), '.agtm');
 const SKILL_LOG_DIR_LOCAL = path.join(AGTM_LOCAL_DIR, 'skills', 'log');
@@ -731,7 +732,7 @@ function loadLevelDescriptions(levelFile?: string): any | null {
     }
 }
 
-const DEFAULT_EVAL_PROMPT = 'You are an evaluator of skill performance. Score each example from 0.0 to 1.0 and assign a level based on benchmarks. Return JSON only.';
+const DEFAULT_EVAL_SYSTEM_PROMPT = 'System Prompt: You are an evaluator of skill performance. Score each example from 0.0 to 1.0 and assign a level based on benchmarks. Return JSON only. Please output json in format of {"skill_id": <skill_id>, "results": [{"log_id": "<log_id_1>", "score": 1.0, "level": "L3", **extra},{"log_id": "<log_id_2>", "score": 1.0, "level": "L3", **extra}]}';
 const BENCHMARK_TOP_K = 3;
 
 function benchmarkKey(obj: any): string {
@@ -779,18 +780,87 @@ async function handleSkillsRatePrepare(options: { skill_id?: string; prompt?: st
         process.exit(1);
     }
 
+    var userInputPrompt = `User prompt: ${(options.prompt || "")}`;
+    var mergeInstruction = DEFAULT_EVAL_SYSTEM_PROMPT + "\n" + userInputPrompt;
+
     const levelsData = loadLevelDescriptions(options.benchmark);
     const benchmarks = normalizeBenchmarks(skillId, levelsData).slice(0, BENCHMARK_TOP_K);
     const payload = {
         skill_id: skillId,
         benchmarks,
         logs: logs.map(({ log_id, input, output }) => ({ log_id, input, output })),
-        instructions: options.prompt || DEFAULT_EVAL_PROMPT
+        instructions: mergeInstruction
     };
     console.log(JSON.stringify(payload, null, 2));
 }
 
 async function handleSkillsRateApply(options: { skill_id?: string; result?: string; logDir?: string }) {
+  const skillId = options.skill_id;
+  if (!skillId) {
+    console.error('\n❌ Error: --skill_id is required.');
+    process.exit(1);
+  }
+  if (!options.result) {
+    console.error('\n❌ Error: --result <json or base64> is required.');
+    process.exit(1);
+  }
+
+  let parsed: any;
+  try {
+    let raw = options.result;
+
+    // Attempt base64 decode if JSON parsing fails
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      // try decode base64
+      raw = Buffer.from(raw, 'base64').toString('utf8');
+      parsed = JSON.parse(raw);
+    }
+  } catch (e: any) {
+    console.error(`\n❌ Error: invalid JSON/base64 for --result: ${e.message}`);
+    process.exit(1);
+  }
+
+  const results: any[] = Array.isArray(parsed?.results) ? parsed.results : [];
+  if (results.length === 0) {
+    console.error('\n❌ Error: --result must contain a non-empty "results" array.');
+    process.exit(1);
+  }
+
+  const logDir = getLogDir(options.logDir);
+  const logs = loadLogs(logDir).filter(l => l.skill_id === skillId);
+  const byId = new Map(logs.map(l => [l.log_id, l]));
+
+  let updated = 0;
+  const missing: string[] = [];
+
+  for (const item of results) {
+    const id = item?.log_id;
+    if (!id || !byId.has(id)) {
+      missing.push(String(id || 'unknown'));
+      continue;
+    }
+    const entry = byId.get(id) as SkillLogEntry;
+
+    // Support both 'score' and 'rating'
+    if (item.rating !== undefined) entry.rating = Number(item.rating);
+    if (item.score !== undefined) entry.rating = Number(item.score);
+
+    if (item.level !== undefined) entry.level = String(item.level);
+
+    // Optional rationale
+    if (item.rationale !== undefined) entry.rationale = String(item.rationale);
+
+    const target = path.join(logDir, `${entry.log_id}.json`);
+    fs.writeFileSync(target, JSON.stringify(entry, null, 2), 'utf8');
+    updated += 1;
+  }
+
+  console.log(JSON.stringify({ status: 'success', updated, missing }, null, 2));
+}
+
+async function handleSkillsRateApplyBak(options: { skill_id?: string; result?: string; logDir?: string }) {
     const skillId = options.skill_id;
     if (!skillId) {
         console.error('\n❌ Error: --skill_id is required.');
@@ -950,7 +1020,12 @@ type HintsConfig = Record<string, { hints: HintItem[] }>;
 
 type TrieNode = {
     children: Map<string, TrieNode>;
-    values: Set<string>;
+    terminalValues: Set<string>;
+};
+
+type PersistedTrieNode = {
+    children?: Record<string, PersistedTrieNode>;
+    terminalValues?: string[];
 };
 
 function levenshteinDistance(a: string, b: string): number {
@@ -1051,7 +1126,7 @@ function fuzzyScore(query: string, candidate: string): number {
 }
 
 function createTrie(): TrieNode {
-    return { children: new Map(), values: new Set() };
+    return { children: new Map(), terminalValues: new Set() };
 }
 
 function insertTrie(trie: TrieNode, key: string, value: string) {
@@ -1066,8 +1141,8 @@ function insertTrie(trie: TrieNode, key: string, value: string) {
             node.children.set(ch, created);
             node = created;
         }
-        node.values.add(value);
     }
+    node.terminalValues.add(value);
 }
 
 function searchTrie(trie: TrieNode, prefix: string, limit: number): string[] {
@@ -1079,9 +1154,56 @@ function searchTrie(trie: TrieNode, prefix: string, limit: number): string[] {
             return [];
         }
     }
-    const values = Array.from(node.values);
-    values.sort((a, b) => a.localeCompare(b));
-    return values.slice(0, limit);
+    const out: string[] = [];
+    const seen = new Set<string>();
+
+    const dfs = (current: TrieNode) => {
+        if (out.length >= limit) return;
+        const terminal = Array.from(current.terminalValues).sort((a, b) => a.localeCompare(b));
+        for (const value of terminal) {
+            if (out.length >= limit) return;
+            if (seen.has(value)) continue;
+            seen.add(value);
+            out.push(value);
+        }
+        const keys = Array.from(current.children.keys()).sort((a, b) => a.localeCompare(b));
+        for (const key of keys) {
+            if (out.length >= limit) return;
+            dfs(current.children.get(key)!);
+        }
+    };
+
+    dfs(node);
+    return out;
+}
+
+function trieToPersisted(node: TrieNode): PersistedTrieNode {
+    const children: Record<string, PersistedTrieNode> = {};
+    for (const [key, child] of node.children.entries()) {
+        children[key] = trieToPersisted(child);
+    }
+    return {
+        children: Object.keys(children).length ? children : undefined,
+        terminalValues: node.terminalValues.size ? Array.from(node.terminalValues).sort((a, b) => a.localeCompare(b)) : undefined
+    };
+}
+
+function persistedToTrie(node: PersistedTrieNode): TrieNode {
+    const trie = createTrie();
+    if (Array.isArray(node.terminalValues)) {
+        for (const value of node.terminalValues) {
+            if (typeof value === 'string' && value.trim()) {
+                trie.terminalValues.add(value);
+            }
+        }
+    }
+    if (node.children && typeof node.children === 'object') {
+        for (const [key, child] of Object.entries(node.children)) {
+            if (!child || typeof child !== 'object') continue;
+            trie.children.set(key, persistedToTrie(child));
+        }
+    }
+    return trie;
 }
 
 function mergeHints(target: HintsConfig, source: HintsConfig): HintsConfig {
@@ -1132,6 +1254,27 @@ function loadHintsFile(filePath: string): HintsConfig {
 function writeHintsFile(filePath: string, hints: HintsConfig) {
     ensureDir(path.dirname(filePath));
     fs.writeFileSync(filePath, JSON.stringify(hints, null, 2));
+}
+
+function writeHintsTrieFile(filePath: string, trie: TrieNode) {
+    ensureDir(path.dirname(filePath));
+    fs.writeFileSync(filePath, JSON.stringify(trieToPersisted(trie), null, 2), 'utf8');
+}
+
+function loadHintsTrieFile(filePath: string): TrieNode | null {
+    if (!fs.existsSync(filePath)) {
+        return null;
+    }
+    try {
+        const raw = fs.readFileSync(filePath, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') {
+            return null;
+        }
+        return persistedToTrie(parsed as PersistedTrieNode);
+    } catch {
+        return null;
+    }
 }
 
 function findBundledHintsDir(): string | null {
@@ -1186,6 +1329,16 @@ async function loadBundledHints(): Promise<HintsConfig> {
 }
 
 function getHintsPath(useGlobal: boolean): string {
+    const baseDir = useGlobal ? AGTM_GLOBAL_DIR : AGTM_LOCAL_DIR;
+    return path.join(baseDir, 'hints', 'hints.json');
+}
+
+function getHintsTriePath(useGlobal: boolean): string {
+    const baseDir = useGlobal ? AGTM_GLOBAL_DIR : AGTM_LOCAL_DIR;
+    return path.join(baseDir, 'hints', 'hints_trie.json');
+}
+
+function getOldHintsPath(useGlobal: boolean): string {
     if (useGlobal) {
         return path.join(AGTM_GLOBAL_DIR, 'hints.json');
     }
@@ -1206,6 +1359,8 @@ function loadCombinedHints(useGlobal: boolean): HintsConfig {
     const localHints = loadHintsFile(getHintsPath(false));
     mergeHints(combined, globalHints);
     mergeHints(combined, localHints);
+    mergeHints(combined, loadHintsFile(getOldHintsPath(true)));
+    mergeHints(combined, loadHintsFile(getOldHintsPath(false)));
     mergeHints(combined, loadHintsFile(getLegacyHintsPath(true)));
     mergeHints(combined, loadHintsFile(getLegacyHintsPath(false)));
     if (useGlobal) {
@@ -1248,6 +1403,48 @@ function filterCliHints(hints: HintItem[], query: string, limit: number): HintIt
     return sorted.slice(0, limit);
 }
 
+function highlightMatches(text: string, query: string): string {
+    const trimmed = query.trim();
+    if (!trimmed) return text;
+    const tokens = trimmed
+        .toLowerCase()
+        .split(/[^a-z0-9]+/g)
+        .map((t) => t.trim())
+        .filter(Boolean);
+    if (tokens.length === 0) return text;
+
+    const lower = text.toLowerCase();
+    const ranges: Array<[number, number]> = [];
+    for (const token of tokens) {
+        let idx = lower.indexOf(token);
+        while (idx !== -1) {
+            ranges.push([idx, idx + token.length]);
+            idx = lower.indexOf(token, idx + 1);
+        }
+    }
+    if (ranges.length === 0) return text;
+    ranges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const merged: Array<[number, number]> = [];
+    for (const [start, end] of ranges) {
+        const last = merged[merged.length - 1];
+        if (!last || start > last[1]) {
+            merged.push([start, end]);
+        } else {
+            last[1] = Math.max(last[1], end);
+        }
+    }
+
+    let out = '';
+    let cursor = 0;
+    for (const [start, end] of merged) {
+        out += text.slice(cursor, start);
+        out += green(text.slice(start, end));
+        cursor = end;
+    }
+    out += text.slice(cursor);
+    return out;
+}
+
 async function promptSelection(prompt: string, options: string[]): Promise<string | null> {
     if (!process.stdin.isTTY) {
         return options.length > 0 ? options[0] : null;
@@ -1271,7 +1468,7 @@ async function promptSelection(prompt: string, options: string[]): Promise<strin
     }
 }
 
-async function promptCommandLine(promptText: string): Promise<string | null> {
+async function promptCommandLineBase(promptText: string): Promise<string | null> {
     if (!process.stdin.isTTY) {
         return null;
     }
@@ -1285,7 +1482,44 @@ async function promptCommandLine(promptText: string): Promise<string | null> {
     }
 }
 
-async function selectSkillId(hints: HintsConfig, input?: string, limit = 5): Promise<string | null> {
+import readline from 'readline';
+
+async function promptCommandLine(
+  promptText: string,
+  defaultValue?: string
+): Promise<string | null> {
+  if (!process.stdin.isTTY) return null;
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  try {
+    return await new Promise<string | null>((resolve) => {
+      rl.question(promptText, (answer) => {
+        rl.close();
+        const trimmed = answer.trim();
+        resolve(trimmed || defaultValue || null);
+      });
+
+      // Pre-fill default value and move cursor to end
+      if (defaultValue) {
+        rl.write(defaultValue);
+      }
+    });
+  } finally {
+    // just in case
+    rl.close();
+  }
+}
+
+async function selectSkillId(
+    hints: HintsConfig,
+    input?: string,
+    limit = 5,
+    trie?: TrieNode | null
+): Promise<string | null> {
     const ids = Object.keys(hints);
     if (ids.length === 0) {
         return null;
@@ -1293,9 +1527,9 @@ async function selectSkillId(hints: HintsConfig, input?: string, limit = 5): Pro
     if (input && hints[input]) {
         return input;
     }
-    const trie = buildIdTrie(hints);
+    const activeTrie = trie || buildIdTrie(hints);
     const prefix = input || '';
-    let suggestions = searchTrie(trie, prefix, limit);
+    let suggestions = searchTrie(activeTrie, prefix, limit);
     if (suggestions.length === 0 && prefix) {
         const scored = ids
             .map((id) => ({ id, score: fuzzyScore(prefix, id) }))
@@ -1306,11 +1540,23 @@ async function selectSkillId(hints: HintsConfig, input?: string, limit = 5): Pro
     if (suggestions.length === 0) {
         return null;
     }
-    console.log('\nSkill ID suggestions:');
+    let printedLines = 0;
+    const trackedLog = (message = '') => {
+        console.log(message);
+        printedLines += countConsoleLogLines(message);
+    };
+
+    trackedLog('');
+    trackedLog('Skill ID suggestions:');
     suggestions.forEach((value, index) => {
-        console.log(`  ${index + 1}. ${value}`);
+        trackedLog(`  ${index + 1}. ${highlightMatches(value, prefix)}`);
     });
-    const selected = await promptSelection('\nSelect skill id (number or id): ', suggestions);
+    const selected = await promptSelection('Select skill id (number or id): ', suggestions);
+    printedLines += 1; // prompt line
+
+    if (process.stdin.isTTY && process.stdout.isTTY) {
+        clearLastLines(printedLines + 1); // +1 for the post-input newline line
+    }
 
     console.log(`Selected Skill/Cli is ${selected}`);
 
@@ -1338,13 +1584,24 @@ async function selectCliHint(hints: HintItem[], query?: string, limit = 5): Prom
     if (suggestions.length === 0) {
         return null;
     }
-    console.log('\nCommand hints:');
+    let printedLines = 0;
+    const trackedLog = (message = '') => {
+        console.log(message);
+        printedLines += countConsoleLogLines(message);
+    };
+
+    trackedLog('');
+    trackedLog('Command hints:');
     suggestions.forEach((item, index) => {
         const hintText = item.hint ? ` # ${item.hint}` : '';
-        console.log(`  ${index + 1}. ${item.cli}${hintText}`);
+        trackedLog(`  ${index + 1}. ${highlightMatches(item.cli, query || '')}${hintText}`);
     });
     const options = suggestions.map((item) => item.cli);
-    const selected = await promptSelection('\nSelect command (number or input custom): ', options);
+    const selected = await promptSelection('Select command (number or input custom): ', options);
+    printedLines += 1; // prompt line
+    if (process.stdin.isTTY && process.stdout.isTTY) {
+        clearLastLines(printedLines + 1); // +1 for the post-input newline line
+    }
     if (!selected) {
         return null;
     }
@@ -1368,16 +1625,22 @@ async function handleSetup(options: { hint?: boolean; levels?: boolean; global?:
     if (options.hint) {
         const bundled = await loadBundledHints();
         const targetPath = getHintsPath(useGlobal);
+        const targetTriePath = getHintsTriePath(useGlobal);
         const legacyPath = getLegacyHintsPath(useGlobal);
         const existing = loadHintsFile(targetPath);
+        const existingOld = loadHintsFile(getOldHintsPath(useGlobal));
         const merged: HintsConfig = {};
         mergeHints(merged, bundled);
+        mergeHints(merged, existingOld);
         mergeHints(merged, existing);
         writeHintsFile(targetPath, merged);
+        const trieSource = loadCombinedHints(useGlobal);
+        writeHintsTrieFile(targetTriePath, buildIdTrie(trieSource));
         if (fs.existsSync(path.dirname(legacyPath))) {
             writeHintsFile(legacyPath, merged);
         }
         console.log(`\n✅ Hints cache updated at ${targetPath}`);
+        console.log(`✅ Hints trie updated at ${targetTriePath}`);
     }
 
     if (options['levels']) {
@@ -1392,6 +1655,28 @@ async function handleSetup(options: { hint?: boolean; levels?: boolean; global?:
         console.log(`\n✅ Levels copied to ${targetDir}`);
     }
 }
+
+function clearScreen() {
+  // process.stdout.write('\x1Bc');
+  process.stdout.write('\x1b[0f');
+}
+
+function clearLastLines(n: number) {
+    if (!process.stdout.isTTY) return;
+    for (let i = 0; i < n; i++) {
+        process.stdout.write('\x1b[2K'); // clear current line
+        if (i < n - 1) {
+            process.stdout.write('\x1b[1A'); // move cursor up
+        }
+    }
+    process.stdout.write('\x1b[0G'); // move to start of line
+}
+
+function countConsoleLogLines(message: string): number {
+    if (message === '') return 1;
+    return message.split('\n').length;
+}
+
 
 async function handleRun(
     idArg?: string,
@@ -1425,6 +1710,7 @@ async function handleRun(
             runtimeHints = await loadBundledHints();
         }
         const activeHints = hasHints ? hints : (runtimeHints || {});
+        const cachedIdTrie = hasHints ? loadHintsTrieFile(getHintsTriePath(false)) : null;
         const ids = Object.keys(activeHints);
         if (ids.length === 0) {
             console.error('\n❌ Error: No hints available.');
@@ -1433,7 +1719,7 @@ async function handleRun(
 
         if (!idArg || !activeHints[idArg]) {
             const query = idArg || '';
-            const trie = buildIdTrie(activeHints);
+            const trie = cachedIdTrie || buildIdTrie(activeHints);
             let suggestions = searchTrie(trie, query, 2);
             if (suggestions.length === 0 && query) {
                 const scored = ids
@@ -1444,7 +1730,7 @@ async function handleRun(
             }
             console.log('\nSkill ID suggestions:');
             suggestions.forEach((value, index) => {
-                console.log(`  ${index + 1}. ${value}`);
+                console.log(`  ${index + 1}. ${highlightMatches(value, query)}`);
                 const entry = activeHints[value];
                 if (entry?.hints?.length) {
                     const preview = entry.hints.slice(0, 2).map((h) => `${h.cli}${h.hint ? ` # ${h.hint}` : ''}`);
@@ -1510,23 +1796,27 @@ async function handleRun(
         if (LOG_ENABLE) {
             console.log(`DEBUG: Entering Human Mode | idArg ${idArg} | commandArgs ${commandArgs} | options ${options} | hasHints ${hasHints} | hints ${hints}`);
         }
+        const cachedIdTrie = hasHints ? loadHintsTrieFile(getHintsTriePath(false)) : null;
         // human mode with pause for cli input
         if (!idArg) {
             if (!hasHints) {
                 console.error('\n❌ Error: No hints cache found. Run `agtm setup --hint` first.');
                 process.exit(1);
             }
-            const selected = await selectSkillId(hints);
+            const selected = await selectSkillId(hints, undefined, 5, cachedIdTrie);
             if (!selected) {
                 console.error('\n❌ Error: No skill id selected.');
                 process.exit(1);
             }
             idArg = selected;
+
+            // clearScreen();
         } else if (hasHints && !hints[idArg]) {
-            const selected = await selectSkillId(hints, idArg);
+            const selected = await selectSkillId(hints, idArg, 5, cachedIdTrie);
             if (selected) {
                 idArg = selected;
             }
+            // clearScreen();
         }
 
         let finalCommandArgs = commandArgs;
@@ -1554,14 +1844,14 @@ async function handleRun(
         if (!finalCommandArgs || finalCommandArgs.length === 0) {
             let chosen: HintItem | null = null;
             if (hintEntry?.hints && hintEntry.hints.length > 0) {
-                const query = await promptCommandLine('\nEnter command (leave empty to list hints): ');
+                const query = await promptCommandLine(`\nEnter command to run (leave empty to list cli hints): `, ``);
                 const searchQuery = query || '';
                 chosen = await selectCliHint(hintEntry.hints, searchQuery);
             }
             if (chosen && chosen.cli) {
                 finalCommandArgs = chosen.cli.split(/\s+/).filter(Boolean);
             } else {
-                const manual = await promptCommandLine('\nEnter command to run: ');
+                const manual = await promptCommandLine('\nEnter command line to run: ', ``);
                 if (!manual) {
                     console.error('\n❌ Error: No command selected.');
                     process.exit(1);
@@ -1582,7 +1872,8 @@ async function handleRun(
         }
 
         const finalCommandLine = finalCommandArgs.join(' ');
-        const edited = await promptCommandLine(`\nFinal command [${finalCommandLine}]: `);
+        console.log("\nComplete the Cli with your arguments or leave blank and press Enter");
+        const edited = await promptCommandLine(`\nFinal command line [${finalCommandLine}]:\n`, `${finalCommandLine}`);
         if (edited && edited.trim()) {
             finalCommandArgs = edited.split(/\s+/).filter(Boolean);
         }

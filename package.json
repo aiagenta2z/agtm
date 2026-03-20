@@ -1,6 +1,6 @@
 {
   "name": "@aiagenta2z/agtm",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "agtm: CLI Tool for AI Agent Management, Skills, Agent Registry, Benchmarks and Hints in AI Agent Marketplace\n",
   "main": "dist/agtm-cli.js",
   "type": "module",

@@ -6,6 +6,7 @@ dist/
 test/test_run_package.sh
 test/
 python/
+.playwright-cli/
 .agent
 .agents
 .agtm
