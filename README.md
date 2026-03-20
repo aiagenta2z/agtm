@@ -3,14 +3,18 @@
 
 [GitHub](https://github.com/aiagenta2z/agtm)|[AI Agent Marketplace CLI Doc](https://www.deepnlp.org/doc/ai_agent_marketplace)|[DeepNLP AI Agent Marketplace](https://www.deepnlp.org/store/ai-agent) | [OneKey Gateway](https://deepnlp.org/doc/onekey_gateway) | [Agent MCP OneKey Router Ranking](https://www.deepnlp.org/agent/rankings) | [NodeJS agtm](https://www.npmjs.com/package/@aiagenta2z/agtm)
 
-`agtm` (AI Agent Management CLI) unifies skill management, agent registration, marketplace search, and provider CLI execution. Install skills from GitHub, log and rate skill runs, upload agent metadata to registries, query the public marketplace, and run agent toolchains with fuzzy hints.
+`agtm` (AI Agent Manager CLI) unifies skill management, agent registration, marketplace search, and provider CLI execution. Install skills from GitHub, log and rate skill runs, upload agent metadata to registries, query the public marketplace, and run agent toolchains with fuzzy hints.
 
 ## Features
 
-*`agtm skills`*: Manage Skills, Add Skills, List Skills, Log Skills Performance, Skills performance Evaluator, compare to realworld benchmarks   
-*`agtm upload`*: AI Agent Registry, register local agent meta information of json or yaml format(agent.json/agent.yaml) or sync your github source meta including README.md     
-*`agtm search`*: Search the open source AI Agent Marketplace, including github community, huggingface community, product hunt community, deepnlp ai agent marketplace index, etc     
-*`agtm run`*: Run agent clis, don't need to remember, with the powerful hints and completion ability, just type a few characters and "--hint" will help you complete the command line.   
+**agtm skills**: Manage Skills, Add Skills, List Skills, Log Skills Performance, Skills performance Evaluator, compare to realworld benchmarks   
+**agtm upload**: AI Agent Registry, register local agent meta information of json or yaml format(agent.json/agent.yaml) or sync your github source meta including README.md     
+**agtm search**: Search the open source AI Agent Marketplace, including github community, huggingface community, product hunt community, deepnlp ai agent marketplace index, etc     
+**agtm run**: Run agent clis, don't need to remember, with the powerful hints and completion ability, just type a few characters and "--hint" will help you complete the command line.   
+
+The agent cli run hint from "play" to "playwright" complete cli.
+
+<img src="docs/static/snapshot_playwright_google.png" width="400px" />
 
 Furthermore, `agtm` provides memory to track skill outputs and enables performance rating against industry job level benchmarks. This allows you to score each skill execution and assign a professional tier to your AI Agent's capabilities—for example, evaluating its performance as equivalent to that of an L3 or L5 software engineer, marketing professional, etc.
 
@@ -18,6 +22,7 @@ Furthermore, `agtm` provides memory to track skill outputs and enables performan
 skill_id             run_times  score  level
 -------------------  ---------  -----  -----
 code_success_skills  5          0.9     L3(100%)    
+code_fail_skills  4          0.9     L3(100%)    
 ```
 
 ## Quickstart
@@ -39,10 +44,10 @@ Agtm CLI Options
 
 | CLI         | Command and Options                       | Document                       |
 |-------------|-------------------------------------------|--------------------------------|
-| agtm skills | add, list, log, rate                      | [Doc](../docs/skills/README.md)   |
-| agtm search | --q query                                 | [Doc](../docs/registry/README.md) |
-| agtm upload | --github  --config to local agent meta    | [Doc](../docs/registry/README.md) |
-| agtm run    | --hint agent-cli hint and auto completion | [Doc](../docs/run/README.md)      |
+| agtm skills | add, list, log, rate                      | [Doc](./docs/skills/README.md)  |
+| agtm search | --q query                                 | [Doc](./docs/registry/README.md) |
+| agtm upload | --github  --config to local agent meta    | [Doc](./docs/registry/README.md) |
+| agtm run    | --hint agent-cli hint and auto completion | [Doc](./docs/run/README.md)     |
 
 ## `skills`  
 
