@@ -10,6 +10,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { parseCliHintItemsFromHelp } from './lib/hints.js';
 
 //production setup
 const LOG_ENABLE = false;
@@ -390,7 +391,11 @@ function normalizeExternalSkills(root: string): { name: string; dir: string }[] 
                 const skillBaseName = entry.name.replace(/\.md$/, "");
                 if (skillBaseName.startsWith("CONTRIBUTING")
                     || skillBaseName.startsWith("README")
-                    ||  skillBaseName.startsWith("PULL_REQUEST_TEMPLATE")) {
+                    ||  skillBaseName.startsWith("PULL_REQUEST_TEMPLATE")
+                    ||  skillBaseName.startsWith("QUICKSTART")
+                    ||  skillBaseName.startsWith("INSTALL")
+                    ||  skillBaseName.startsWith("EXECUTIVE-BRIEF")
+                    ) {
                     // skip
                     continue;
                 }
@@ -512,6 +517,483 @@ function copySkillDir(sourceDir: string, targetDir: string) {
     fs.cpSync(sourceDir, targetDir, { recursive: true });
 }
 
+// --- Skills Build (API list -> local skill scaffold) ---
+
+const MARKETPLACE_V2_ENDPOINT = `${BASE_URL}/v2`;
+const MARKETPLACE_ADMIN_HEADER = 'DEEPNLP-MCP-ADMIN-API-KEY';
+
+type MarketplaceApiInfo = {
+    api_id: string;
+    endpoint?: string;
+    method?: string;
+    api_type?: string;
+    auth?: Record<string, any>;
+    description?: string;
+    params?: Record<string, any>;
+};
+
+type NormalizedApiMeta = {
+    unique_id: string;
+    generated_at: string;
+    apis: Record<
+        string,
+        {
+            api_id: string;
+            endpoint: string;
+            method: string;
+            description?: string;
+            params?: Record<string, any>;
+            headers?: Record<string, string>;
+            auth?: { header?: string; env?: string; value?: string; type?: string };
+        }
+    >;
+};
+
+function resolvePackagedDataPath(relPath: string): string {
+    const candidates = [
+        path.join(CLI_DIR, relPath),
+        path.join(CLI_DIR, '..', relPath),
+    ];
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    console.error(`\n❌ Error: Failed to locate packaged path '${relPath}'.`);
+    console.error(`Tried: ${candidates.join(', ')}`);
+    process.exit(1);
+}
+
+function parseRelaxedJson(text: string): any {
+    const withoutBlockComments = text.replace(/\/\*[\s\S]*?\*\//g, '');
+    const withoutLineComments = withoutBlockComments.replace(/^\s*\/\/.*$/gm, '');
+    const withoutTrailingCommas = withoutLineComments.replace(/,\s*([}\]])/g, '$1');
+    return JSON.parse(withoutTrailingCommas);
+}
+
+function loadLocalAgentApiList(): { api_list: MarketplaceApiInfo[]; source: string } | null {
+    const yamlPath = path.join(process.cwd(), 'agent.yaml');
+    const ymlPath = path.join(process.cwd(), 'agent.yml');
+    const jsonPath = path.join(process.cwd(), 'agent.json');
+
+    const candidate = fs.existsSync(yamlPath) ? yamlPath : (fs.existsSync(ymlPath) ? ymlPath : (fs.existsSync(jsonPath) ? jsonPath : null));
+    if (!candidate) return null;
+
+    try {
+        const content = fs.readFileSync(candidate, 'utf8');
+        let parsed: any;
+        if (candidate.endsWith('.json')) {
+            parsed = parseRelaxedJson(content);
+        } else {
+            parsed = yaml.load(content) as any;
+        }
+        const api_list = Array.isArray(parsed?.api_list) ? parsed.api_list : [];
+        return { api_list, source: candidate };
+    } catch (e: any) {
+        console.error(`\n❌ Error: Failed to read '${candidate}': ${e.message}`);
+        process.exit(1);
+    }
+}
+
+async function fetch_agent_api_dict_from_marketplace(agent_id: string): Promise<{ api_dict: Record<string, MarketplaceApiInfo>; item?: Record<string, any> }> {
+    const accessKey = getAccessKey();
+    const params = {
+        id: agent_id,
+        return_fields: 'ext_info,api_list',
+    };
+    const headers: Record<string, string> = {};
+    headers[MARKETPLACE_ADMIN_HEADER] = accessKey;
+
+    try {
+        const response = await axios.get(MARKETPLACE_V2_ENDPOINT, { params, headers, timeout: 15000 });
+        const data = response.data;
+        const api_dict: Record<string, MarketplaceApiInfo> = {};
+        let item: any = undefined;
+        if (data && typeof data === 'object' && Array.isArray(data.items) && data.items.length > 0) {
+            item = data.items[0];
+            const api_list = Array.isArray(item.api_list) ? item.api_list : [];
+            for (const api_info of api_list) {
+                const api_id = api_info?.api_id;
+                if (api_id) {
+                    api_dict[api_id] = api_info;
+                }
+            }
+        }
+        return { api_dict, item };
+    } catch (e: any) {
+        const status = e.response ? e.response.status : 'N/A';
+        const msg = e.response?.data?.msg || e.message;
+        console.error(`\n❌ Error fetching agent '${agent_id}' from marketplace (Status: ${status}): ${msg}`);
+        process.exit(1);
+    }
+}
+
+function normalizeUniqueId(uniqueId: string): { owner: string; repo: string } {
+    const match = uniqueId.trim().match(/^([^/]+)\/([^/]+)$/);
+    if (!match) {
+        console.error(`\n❌ Error: Invalid unique_id '${uniqueId}'. Expected format 'owner/repo'.`);
+        process.exit(1);
+    }
+    return { owner: match[1], repo: match[2] };
+}
+
+function stripMarketplaceApiPrefix(api_id: string): string {
+    const prefix = 'agent.deepnlp.org/api/agent/';
+    if (api_id.startsWith(prefix)) {
+        return api_id.slice(prefix.length);
+    }
+    return api_id;
+}
+
+function toSafeScriptName(value: string): string {
+    return value
+        .trim()
+        .replace(/^\/+|\/+$/g, '')
+        .replace(/[^\w.-]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '');
+}
+
+function extractApiShortId(uniqueId: string, api_id: string): string {
+    const stripped = stripMarketplaceApiPrefix(api_id);
+    if (stripped.startsWith(`${uniqueId}/`)) {
+        return stripped.slice(uniqueId.length + 1);
+    }
+    if (stripped.includes('/')) {
+        return stripped.split('/').filter(Boolean).pop() || stripped;
+    }
+    return stripped;
+}
+
+function buildEnvYaml(authEnvNames: Set<string>): string {
+    const lines: string[] = [];
+    // Always include marketplace key (useful for rebuilds / private metadata).
+    lines.push(`  DEEPNLP_ONEKEY_ROUTER_ACCESS:`);
+    lines.push(`    required: false`);
+    lines.push(`    description: Onekey Gateway Registerd API and Usage access key`);
+
+    const sorted = Array.from(authEnvNames).filter(Boolean).sort();
+    for (const name of sorted) {
+        lines.push(`  ${name}:`);
+        lines.push(`    required: false`);
+        lines.push(`    description: API key for calling the agent endpoints (from api_list.auth)`);
+    }
+    return lines.length ? lines.join('\n') : '  {}';
+}
+
+function renderTemplate(template: string, vars: Record<string, string>): string {
+    return template.replace(/\{\{([A-Z0-9_]+)\}\}/g, (_, key) => (vars[key] !== undefined ? vars[key] : `{{${key}}}`));
+}
+
+function buildApiSectionsMarkdown(uniqueId: string, apis: Array<{ shortId: string; info: MarketplaceApiInfo }>): string {
+    const lines: string[] = [];
+    for (const { shortId, info } of apis) {
+        const method = (info.method || 'GET').toUpperCase();
+        const endpoint = info.endpoint || '';
+        const desc = info.description || '';
+        const params = info.params && typeof info.params === 'object' ? info.params : {};
+        const auth = info.auth && typeof info.auth === 'object' ? info.auth : {};
+        const authHeader = typeof auth.header === 'string' ? auth.header : undefined;
+        const authValue = typeof auth.value === 'string' ? auth.value : undefined;
+        const authEnv = authValue && /^[A-Z0-9_]+$/.test(authValue) ? authValue : undefined;
+
+        lines.push(`### \`${shortId}\``);
+        if (desc) lines.push(desc);
+        lines.push('');
+        lines.push(`- Method: \`${method}\``);
+        lines.push(`- Endpoint: \`${endpoint}\``);
+        if (authHeader && authEnv) {
+            lines.push(`- Auth: header \`${authHeader}\` from env \`${authEnv}\``);
+        }
+        if (Object.keys(params).length > 0) {
+            lines.push('');
+            lines.push('Parameters:');
+            for (const [k, v] of Object.entries(params)) {
+                lines.push(`- \`${k}\`: \`${String(v)}\``);
+            }
+        }
+        lines.push('');
+        lines.push('#### Curl');
+        const headerPart = authHeader && authEnv ? ` \\\n  -H "${authHeader}: $${authEnv}"` : '';
+        if (method === 'GET' || method === 'DELETE') {
+            lines.push('```bash');
+            lines.push(`curl -X ${method} "${endpoint}"${headerPart}`);
+            lines.push('```');
+        } else {
+            lines.push('```bash');
+            lines.push(`curl -X ${method} "${endpoint}" \\`);
+            lines.push(`  -H "Content-Type: application/json"${authHeader && authEnv ? ` \\\n  -H "${authHeader}: $${authEnv}"` : ''} \\`);
+            lines.push(`  -d '{}'`);
+            lines.push('```');
+        }
+        lines.push('');
+        lines.push('#### Scripts');
+        lines.push('```bash');
+        lines.push(`node scripts/${toSafeScriptName(shortId)}.js --data '{}'`);
+        lines.push(`python3 scripts/${toSafeScriptName(shortId)}.py --data '{}'`);
+        lines.push('```');
+        lines.push('');
+    }
+    return lines.join('\n');
+}
+
+
+function buildCLISectionsMarkdown(uniqueId: string, apis: Array<{ shortId: string; info: MarketplaceApiInfo }>): string {
+    const lines: string[] = [];
+
+    function shellQuoteSingle(value: string): string {
+        // POSIX-safe single-quote: ' -> '"'"'
+        return `'${value.replace(/'/g, `'\"'\"'`)}'`;
+    }
+
+    function inferSampleValue(spec: any): any {
+        if (spec === null || spec === undefined) return 'value';
+        if (typeof spec === 'string') {
+            const s = spec.toLowerCase();
+            if (s.includes('bool')) return false;
+            if (s.includes('int') || s.includes('number') || s.includes('float') || s.includes('double')) return 0;
+            if (s.includes('array') || s.includes('list')) return [];
+            if (s.includes('object') || s.includes('json') || s.includes('dict') || s.includes('map')) return {};
+            return 'value';
+        }
+        if (typeof spec === 'number' || typeof spec === 'boolean') return spec;
+        if (Array.isArray(spec)) return spec.length > 0 ? [inferSampleValue(spec[0])] : [];
+        if (typeof spec === 'object') {
+            if (Object.prototype.hasOwnProperty.call(spec, 'example')) return (spec as any).example;
+            if (Object.prototype.hasOwnProperty.call(spec, 'default')) return (spec as any).default;
+
+            const type = typeof (spec as any).type === 'string' ? String((spec as any).type).toLowerCase() : '';
+            if (type === 'boolean') return false;
+            if (type === 'integer' || type === 'number') return 0;
+            if (type === 'array') return (spec as any).items ? [inferSampleValue((spec as any).items)] : [];
+            if (type === 'object') {
+                const props = (spec as any).properties;
+                if (props && typeof props === 'object' && !Array.isArray(props)) {
+                    const obj: Record<string, any> = {};
+                    for (const key of Object.keys(props).slice(0, 4)) {
+                        obj[key] = inferSampleValue((props as any)[key]);
+                    }
+                    return obj;
+                }
+                return {};
+            }
+            if (type === 'string') return 'value';
+
+            // Fallback heuristic: treat as JSON schema-ish object with nested values.
+            const keys = Object.keys(spec);
+            if (keys.length > 0 && keys.length <= 4) {
+                const obj: Record<string, any> = {};
+                for (const key of keys) obj[key] = inferSampleValue((spec as any)[key]);
+                return obj;
+            }
+            return 'value';
+        }
+        return 'value';
+    }
+
+    function buildSamplePayload(params: any): Record<string, any> {
+        if (!params || typeof params !== 'object' || Array.isArray(params)) return {};
+        const skip = new Set(['return_fields']);
+        const keys = Object.keys(params)
+            .filter((k) => !skip.has(k))
+            .sort()
+            .slice(0, 6);
+        const payload: Record<string, any> = {};
+        for (const key of keys) {
+            payload[key] = inferSampleValue((params as any)[key]);
+        }
+        return payload;
+    }
+
+    lines.push('```shell');
+    for (const { shortId, info } of apis) {
+        const payloadObj = buildSamplePayload(info.params);
+        const json = JSON.stringify(Object.keys(payloadObj).length > 0 ? payloadObj : { key: 'value' });
+        lines.push(`npx onekey agent ${uniqueId} ${shortId} ${shellQuoteSingle(json)}`);
+    }
+    lines.push('```');
+    lines.push('');
+
+    return lines.join('\n');
+}
+
+
+function writeFileEnsuringDir(filePath: string, content: string) {
+    ensureDir(path.dirname(filePath));
+    fs.writeFileSync(filePath, content, 'utf8');
+}
+
+function buildWrapperScriptJs(apiShortId: string): string {
+    const safe = toSafeScriptName(apiShortId);
+    return `#!/usr/bin/env node
+
+const { spawnSync } = require("node:child_process");
+const path = require("node:path");
+
+const script = path.join(__dirname, "run_api.js");
+const args = process.argv.slice(2);
+const res = spawnSync(process.execPath, [script, "--api", ${JSON.stringify(apiShortId)}, ...args], { stdio: "inherit" });
+process.exit(typeof res.status === "number" ? res.status : 1);
+`;
+}
+
+function buildWrapperScriptPy(apiShortId: string): string {
+    return `#!/usr/bin/env python3
+
+import os
+import subprocess
+import sys
+
+def main():
+    script = os.path.join(os.path.dirname(__file__), "run_api.py")
+    args = [sys.executable, script, "--api", ${JSON.stringify(apiShortId)}] + sys.argv[1:]
+    res = subprocess.run(args)
+    raise SystemExit(res.returncode)
+
+if __name__ == "__main__":
+    main()
+`;
+}
+
+function buildWrapperScriptTs(apiShortId: string): string {
+    return `/* eslint-disable */
+import { spawnSync } from "node:child_process";
+import * as path from "node:path";
+
+const script = path.join(__dirname, "run_api.js");
+const args = process.argv.slice(2);
+const res = spawnSync(process.execPath, [script, "--api", ${JSON.stringify(apiShortId)}, ...args], { stdio: "inherit" });
+process.exit(typeof res.status === "number" ? res.status : 1);
+`;
+}
+
+async function handleSkillsBuild(uniqueId: string, options: { force?: boolean } = {}) {
+    const { owner, repo } = normalizeUniqueId(uniqueId);
+    const skillName = owner === repo ? owner : `${owner}-${repo}`;
+
+    let api_list: MarketplaceApiInfo[] = [];
+    let marketplaceItem: Record<string, any> | undefined;
+    const local = loadLocalAgentApiList();
+    if (local && Array.isArray(local.api_list) && local.api_list.length > 0) {
+        api_list = local.api_list;
+        console.log(`INFO: Loaded api_list from local config: ${local.source}`);
+    } else {
+        console.log(`INFO: Local agent.yaml/json missing api_list; fetching from marketplace (private): ${uniqueId}`);
+        const { api_dict, item } = await fetch_agent_api_dict_from_marketplace(uniqueId);
+        marketplaceItem = item;
+        api_list = Object.values(api_dict);
+    }
+
+    // Filter out placeholder base entries and invalid endpoints.
+    const filtered = api_list
+        .filter((api) => api && typeof api.api_id === 'string')
+        .filter((api) => typeof api.endpoint === 'string' && api.endpoint.trim().length > 0)
+        .map((api) => ({ shortId: extractApiShortId(uniqueId, api.api_id), info: api }))
+        .filter((entry) => entry.shortId && entry.shortId.trim().length > 0);
+
+    if (filtered.length === 0) {
+        console.error(`\n❌ Error: No usable APIs found for '${uniqueId}'. Ensure agent.yaml has api_list or the agent is registered with api_list.`);
+        process.exit(1);
+    }
+
+    const templateDir = resolvePackagedDataPath(path.join('data', 'skills', 'template-skills'));
+    const outRoot = path.join(process.cwd(), 'skills');
+    ensureDir(outRoot);
+    const outDir = path.join(outRoot, skillName);
+
+    if (fs.existsSync(outDir) && !options.force) {
+        console.error(`\n❌ Error: Skill already exists at '${outDir}'. Re-run with --force to overwrite.`);
+        process.exit(1);
+    }
+    if (fs.existsSync(outDir) && options.force) {
+        fs.rmSync(outDir, { recursive: true, force: true });
+    }
+
+    fs.cpSync(templateDir, outDir, { recursive: true });
+
+    // Build reference files.
+    const referenceDir = path.join(outDir, 'reference');
+    ensureDir(referenceDir);
+    writeFileEnsuringDir(path.join(referenceDir, 'api_list.json'), JSON.stringify(api_list, null, 2) + '\n');
+
+    const authEnvNames = new Set<string>();
+    const apiMeta: NormalizedApiMeta = {
+        unique_id: uniqueId,
+        generated_at: new Date().toISOString(),
+        apis: {},
+    };
+
+    // Deduplicate short IDs (keep docs and scripts consistent).
+    const usedIds = new Map<string, number>();
+    const dedupedForDocs: Array<{ shortId: string; info: MarketplaceApiInfo }> = [];
+    for (const entry of filtered) {
+        let shortId = entry.shortId;
+        const safeBase = shortId;
+        const count = usedIds.get(safeBase) || 0;
+        usedIds.set(safeBase, count + 1);
+        if (count > 0) {
+            shortId = `${safeBase}_${count + 1}`;
+        }
+
+        const info = entry.info;
+        dedupedForDocs.push({ shortId, info });
+        const method = (info.method || 'GET').toUpperCase();
+        const endpoint = String(info.endpoint || '').trim();
+        const auth = info.auth && typeof info.auth === 'object' ? info.auth : {};
+        const authHeader = typeof auth.header === 'string' ? auth.header : undefined;
+        const authValue = typeof auth.value === 'string' ? auth.value : undefined;
+        const authEnv = authValue && /^[A-Z0-9_]+$/.test(authValue) ? authValue : undefined;
+        if (authEnv) authEnvNames.add(authEnv);
+
+        apiMeta.apis[shortId] = {
+            api_id: info.api_id,
+            endpoint,
+            method,
+            description: info.description,
+            params: info.params,
+            headers: {},
+            auth: authHeader || authEnv ? { header: authHeader, env: authEnv, value: authValue, type: (auth as any).type } : undefined,
+        };
+    }
+
+    writeFileEnsuringDir(path.join(referenceDir, 'api_meta.json'), JSON.stringify(apiMeta, null, 2) + '\n');
+    if (marketplaceItem) {
+        writeFileEnsuringDir(path.join(referenceDir, 'marketplace_item.json'), JSON.stringify(marketplaceItem, null, 2) + '\n');
+    }
+
+    // Render SKILL.md.
+    const skillMdPath = path.join(outDir, 'SKILL.md');
+    const templateMd = fs.readFileSync(skillMdPath, 'utf8');
+    const description = marketplaceItem?.description || `Auto-generated skill for ${uniqueId}`;
+    const apiSections = buildApiSectionsMarkdown(uniqueId, dedupedForDocs);
+    const cliSections = buildCLISectionsMarkdown(uniqueId, dedupedForDocs);
+    const rendered = renderTemplate(templateMd, {
+        SKILL_NAME: skillName,
+        SKILL_TITLE: skillName,
+        UNIQUE_ID: uniqueId,
+        SKILL_DESCRIPTION: description.replace(/\r?\n/g, ' ').trim(),
+        ENV_YAML: buildEnvYaml(authEnvNames),
+        API_SECTIONS: apiSections,
+        CLI_SECTIONS: cliSections
+    });
+    fs.writeFileSync(skillMdPath, rendered, 'utf8');
+
+    // Create per-API wrapper scripts.
+    const scriptsDir = path.join(outDir, 'scripts');
+    ensureDir(scriptsDir);
+
+    for (const apiShortId of Object.keys(apiMeta.apis)) {
+        const safeName = toSafeScriptName(apiShortId);
+        writeFileEnsuringDir(path.join(scriptsDir, `${safeName}.js`), buildWrapperScriptJs(apiShortId));
+        writeFileEnsuringDir(path.join(scriptsDir, `${safeName}.py`), buildWrapperScriptPy(apiShortId));
+        writeFileEnsuringDir(path.join(scriptsDir, `${safeName}.ts`), buildWrapperScriptTs(apiShortId));
+    }
+
+    console.log(`\n✅ Skills generated for ${uniqueId}`);
+    console.log(`   Output: ${outDir}`);
+    console.log(`   APIs: ${Object.keys(apiMeta.apis).length}`);
+}
+
 
 
 async function handleSkillsAdd(options: { source?: string; skill?: string[]; agent?: string[]; global?: boolean }) {
@@ -521,7 +1003,7 @@ async function handleSkillsAdd(options: { source?: string; skill?: string[]; age
         process.exit(1);
         return;
     }
-    console.log("INFO: Staring to fetch skills...")
+    console.log("INFO: Starting to fetch skills...")
     const resolved = resolveSkillSource(source);
     const skills = discoverSkills(resolved.root);
     if (skills.length === 0) {
@@ -1016,7 +1498,16 @@ type HintItem = {
     hint?: string;
 };
 
-type HintsConfig = Record<string, { hints: HintItem[] }>;
+type HintsConfig = Record<
+    string,
+    {
+        hints: HintItem[];
+        meta?: {
+            helpDepth?: number;
+            updatedAt?: string;
+        };
+    }
+>;
 
 type TrieNode = {
     children: Map<string, TrieNode>;
@@ -1256,6 +1747,452 @@ function writeHintsFile(filePath: string, hints: HintsConfig) {
     fs.writeFileSync(filePath, JSON.stringify(hints, null, 2));
 }
 
+type SpawnCaptureResult = {
+    code: number | null;
+    stdout: string;
+    stderr: string;
+    timedOut: boolean;
+};
+
+function getManagedNpmPrefixDir(useGlobal: boolean): string {
+    const baseDir = useGlobal ? AGTM_GLOBAL_DIR : AGTM_LOCAL_DIR;
+    return path.join(baseDir, 'npm');
+}
+
+function isNpmPackageInstalledInPrefix(prefixDir: string, pkgName: string): boolean {
+    try {
+        const pkgJsonPath = path.join(npmGlobalPackageDir(prefixDir, pkgName), 'package.json');
+        return fs.existsSync(pkgJsonPath);
+    } catch {
+        return false;
+    }
+}
+
+async function ensureNpmPackageInstalledInPrefix(
+    pkgName: string,
+    options: { prefixDir: string; timeoutMs: number }
+): Promise<boolean> {
+    if (isNpmPackageInstalledInPrefix(options.prefixDir, pkgName)) {
+        return true;
+    }
+
+    ensureDir(options.prefixDir);
+    const cacheDir = path.join(options.prefixDir, '.npm-cache');
+    ensureDir(cacheDir);
+    const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        NPM_CONFIG_CACHE: cacheDir,
+        NPM_CONFIG_UPDATE_NOTIFIER: 'false',
+        NPM_CONFIG_FUND: 'false',
+        NPM_CONFIG_AUDIT: 'false'
+    };
+
+    const installTimeoutMs = Math.max(options.timeoutMs, 180_000);
+    const install = await spawnCaptureWithTimeout(
+        'npm',
+        ['install', '-g', '--no-progress', '--no-audit', '--no-fund', '--package-lock=false', '--prefix', options.prefixDir, pkgName],
+        { cwd: process.cwd(), env, timeoutMs: installTimeoutMs }
+    );
+    if (install.timedOut || install.code !== 0) {
+        return false;
+    }
+    return isNpmPackageInstalledInPrefix(options.prefixDir, pkgName);
+}
+
+async function uninstallNpmPackageFromPrefix(
+    pkgName: string,
+    options: { prefixDir: string; timeoutMs: number }
+): Promise<boolean> {
+    if (!fs.existsSync(options.prefixDir)) {
+        return true;
+    }
+    const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        NPM_CONFIG_UPDATE_NOTIFIER: 'false',
+        NPM_CONFIG_FUND: 'false',
+        NPM_CONFIG_AUDIT: 'false'
+    };
+    const uninstallTimeoutMs = Math.max(options.timeoutMs, 120_000);
+    const uninstall = await spawnCaptureWithTimeout(
+        'npm',
+        ['uninstall', '-g', '--no-progress', '--no-audit', '--no-fund', '--prefix', options.prefixDir, pkgName],
+        { cwd: process.cwd(), env, timeoutMs: uninstallTimeoutMs }
+    );
+    if (uninstall.timedOut) {
+        return false;
+    }
+    return !isNpmPackageInstalledInPrefix(options.prefixDir, pkgName);
+}
+
+function spawnCaptureWithTimeout(
+    command: string,
+    args: string[],
+    options: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs: number }
+): Promise<SpawnCaptureResult> {
+    return new Promise((resolve) => {
+        let stdout = '';
+        let stderr = '';
+        let settled = false;
+        let timedOut = false;
+
+        const child = spawn(command, args, {
+            cwd: options.cwd,
+            env: options.env,
+            stdio: ['ignore', 'pipe', 'pipe']
+        });
+
+        child.stdout?.on('data', (chunk) => {
+            stdout += chunk.toString();
+        });
+        child.stderr?.on('data', (chunk) => {
+            stderr += chunk.toString();
+        });
+
+        const timer = setTimeout(() => {
+            timedOut = true;
+            try {
+                child.kill('SIGKILL');
+            } catch {
+                // ignore
+            }
+        }, Math.max(1, options.timeoutMs));
+
+        const finish = (code: number | null) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve({ code, stdout, stderr, timedOut });
+        };
+
+        child.on('error', (err) => {
+            stderr += (stderr ? '\n' : '') + String(err?.message || err);
+            finish(null);
+        });
+        child.on('close', (code) => {
+            finish(code);
+        });
+    });
+}
+
+function looksLikeScopedNpmPackage(value: string): boolean {
+    return /^@[^/\s]+\/[^/\s]+$/.test(value.trim());
+}
+
+function looksLikeUnscopedNpmPackage(value: string): boolean {
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+    if (trimmed.includes('/') || trimmed.startsWith('@')) return false;
+    // Be permissive but avoid obvious non-package inputs.
+    return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(trimmed);
+}
+
+function looksLikeNpmPackage(value: string): boolean {
+    return looksLikeScopedNpmPackage(value) || looksLikeUnscopedNpmPackage(value);
+}
+
+function npmPackageDir(root: string, pkgName: string): string {
+    return path.join(root, 'node_modules', ...pkgName.split('/'));
+}
+
+function collectNpmBinCandidates(pkgName: string, pkgJson: any): string[] {
+    const candidates: string[] = [];
+    const baseName = pkgName.includes('/') ? pkgName.split('/').pop() || pkgName : pkgName;
+
+    if (pkgJson && pkgJson.bin) {
+        if (typeof pkgJson.bin === 'string') {
+            candidates.push(baseName);
+        } else if (typeof pkgJson.bin === 'object') {
+            for (const key of Object.keys(pkgJson.bin)) {
+                candidates.push(key);
+            }
+        }
+    }
+
+    candidates.push(baseName);
+    const unique = new Set<string>();
+    const out: string[] = [];
+    for (const item of candidates.map((c) => c.trim()).filter(Boolean)) {
+        if (unique.has(item)) continue;
+        unique.add(item);
+        out.push(item);
+    }
+    return out;
+}
+
+function npmGlobalPackageDir(prefixDir: string, pkgName: string): string {
+    // npm global installs (on *nix) typically end up under: <prefix>/lib/node_modules/<pkg>
+    return path.join(prefixDir, 'lib', 'node_modules', ...pkgName.split('/'));
+}
+
+function findBinPath(
+    options: { kind: 'localProject'; root: string } | { kind: 'globalPrefix'; prefixDir: string },
+    binName: string
+): string | null {
+    const binDir = options.kind === 'localProject'
+        ? path.join(options.root, 'node_modules', '.bin')
+        : path.join(options.prefixDir, 'bin');
+
+    const candidates = [binName, `${binName}.cmd`, `${binName}.ps1`];
+    for (const name of candidates) {
+        const full = path.join(binDir, name);
+        if (fs.existsSync(full)) return full;
+    }
+    return null;
+}
+
+async function generateHintsFromNpmPackage(
+    pkgName: string,
+    options: { timeoutMs: number; npmPrefixDir?: string }
+): Promise<HintItem[] | null> {
+    const timeoutMs = options.timeoutMs;
+    const localRoot = process.cwd();
+    const localPkgJsonPath = path.join(npmPackageDir(localRoot, pkgName), 'package.json');
+
+    let workRoot = localRoot;
+    let installKind: 'localProject' | 'globalPrefix' = 'localProject';
+    let prefixDir: string | null = null;
+    let cleanup: (() => void) | null = null;
+
+    if (!fs.existsSync(localPkgJsonPath)) {
+        // If we have a managed prefix, install there (persistent) so the CLI is available for future runs.
+        if (options.npmPrefixDir) {
+            prefixDir = options.npmPrefixDir;
+            const ok = await ensureNpmPackageInstalledInPrefix(pkgName, { prefixDir, timeoutMs });
+            if (!ok) {
+                return null;
+            }
+            installKind = 'globalPrefix';
+        } else {
+        // Install into an isolated *global* prefix so we can execute the real CLI binary without
+        // mutating the user's project dependencies.
+        const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agtm-npm-'));
+        cleanup = () => {
+            try {
+                fs.rmSync(tmpRoot, { recursive: true, force: true });
+            } catch {
+                // ignore
+            }
+        };
+
+        try {
+            prefixDir = path.join(tmpRoot, 'npm-global');
+            ensureDir(prefixDir);
+        } catch {
+            cleanup?.();
+            return null;
+        }
+
+        const cacheDir = path.join(tmpRoot, '.npm-cache');
+        ensureDir(cacheDir);
+        const env: NodeJS.ProcessEnv = {
+            ...process.env,
+            NPM_CONFIG_CACHE: cacheDir,
+            NPM_CONFIG_UPDATE_NOTIFIER: 'false',
+            NPM_CONFIG_FUND: 'false',
+            NPM_CONFIG_AUDIT: 'false'
+        };
+
+        console.log(`INFO: Starting to install npm package ${pkgName}...`);
+        const installTimeoutMs = Math.max(timeoutMs, 180_000);
+        const install = await spawnCaptureWithTimeout(
+            'npm',
+            ['install', '-g', '--no-progress', '--no-audit', '--no-fund', '--package-lock=false', '--prefix', prefixDir, pkgName],
+            { cwd: tmpRoot, env, timeoutMs: installTimeoutMs }
+        );
+        if (install.timedOut || install.code !== 0) {
+            cleanup?.();
+            return null;
+        }
+
+        workRoot = tmpRoot;
+        installKind = 'globalPrefix';
+        }
+    }
+
+    try {
+        let pkgJsonPath: string;
+        if (installKind === 'localProject') {
+            pkgJsonPath = path.join(npmPackageDir(workRoot, pkgName), 'package.json');
+        } else {
+            if (!prefixDir) {
+                cleanup?.();
+                return null;
+            }
+            pkgJsonPath = path.join(npmGlobalPackageDir(prefixDir, pkgName), 'package.json');
+        }
+        if (!fs.existsSync(pkgJsonPath)) {
+            cleanup?.();
+            return null;
+        }
+        const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+        const binCandidates = collectNpmBinCandidates(pkgName, pkgJson);
+        if (binCandidates.length === 0) {
+            cleanup?.();
+            return null;
+        }
+
+        const allHints: HintItem[] = [];
+
+        const mapLimit = async <T, R>(
+            items: T[],
+            limit: number,
+            fn: (item: T) => Promise<R>
+        ): Promise<R[]> => {
+            const results: R[] = new Array(items.length);
+            let nextIndex = 0;
+            const workers = new Array(Math.max(1, Math.min(limit, items.length))).fill(0).map(async () => {
+                while (true) {
+                    const current = nextIndex;
+                    nextIndex += 1;
+                    if (current >= items.length) return;
+                    results[current] = await fn(items[current]);
+                }
+            });
+            await Promise.all(workers);
+            return results;
+        };
+
+        for (const binName of binCandidates) {
+            console.log(`INFO: Building Hints Index for Bin '${binName}'`);
+
+            const binPath = installKind === 'localProject'
+                ? findBinPath({ kind: 'localProject', root: workRoot }, binName)
+                : (prefixDir ? findBinPath({ kind: 'globalPrefix', prefixDir }, binName) : null);
+            if (!binPath) continue;
+
+            const helpEnv: NodeJS.ProcessEnv = installKind === 'globalPrefix' && prefixDir
+                ? { ...process.env, PATH: `${path.join(prefixDir, 'bin')}${path.delimiter}${process.env.PATH || ''}` }
+                : process.env;
+
+            const baseHelp = await spawnCaptureWithTimeout(binPath, ['--help'], {
+                cwd: localRoot,
+                env: helpEnv,
+                timeoutMs
+            });
+            const baseCombined = `${baseHelp.stdout}\n${baseHelp.stderr}`.trim();
+            if (!baseCombined) continue;
+
+            const baseParsed = parseCliHintItemsFromHelp(baseCombined, { binName });
+            if (baseParsed.length === 0) continue;
+
+            // Add base-level hints first so their descriptions win over nested re-parses.
+            for (const item of baseParsed) {
+                allHints.push({ cli: item.cli, hint: item.hint || '' });
+            }
+
+            // Enumerate exactly one more level of help: "<bin> <sub> --help" in parallel.
+            const subcommands = new Set<string>();
+            for (const item of baseParsed) {
+                const cli = (item.cli || '').trim();
+                if (!cli.startsWith(`${binName} `)) continue;
+                const rest = cli.slice(`${binName} `.length).trim();
+                // Only expand first-level subcommands like "docs", "api" (single token, not placeholders).
+                const parts = rest.split(/\s+/).filter(Boolean);
+                if (parts.length !== 1) continue;
+                const token = parts[0];
+                if (isPlaceholder(token)) continue;
+                subcommands.add(token);
+            }
+
+            const subList = Array.from(subcommands);
+            const secondLevel = await mapLimit(subList, 6, async (sub) => {
+                const subHelp = await spawnCaptureWithTimeout(binPath, [sub, '--help'], {
+                    cwd: localRoot,
+                    env: helpEnv,
+                    timeoutMs
+                });
+                const combined = `${subHelp.stdout}\n${subHelp.stderr}`.trim();
+                if (!combined) return [];
+                const parsed = parseCliHintItemsFromHelp(combined, { binName: `${binName} ${sub}` });
+                return parsed.map((p) => ({ cli: p.cli, hint: p.hint || '' }));
+            });
+            for (const list of secondLevel) {
+                for (const hint of list) {
+                    allHints.push(hint);
+                }
+            }
+        }
+
+        const seen = new Set<string>();
+        const deduped: HintItem[] = [];
+        for (const item of allHints) {
+            const cli = String(item.cli || '').trim();
+            if (!cli) continue;
+            if (seen.has(cli)) continue;
+            seen.add(cli);
+            deduped.push({ cli, hint: item.hint || '' });
+        }
+        return deduped.length > 0 ? deduped : null;
+    } catch {
+        // ignore parsing errors
+    } finally {
+        cleanup?.();
+    }
+
+    return null;
+}
+
+async function ensureNpmPackageHintsCached(
+    pkgName: string,
+    options: { useGlobal: boolean; timeoutMs: number }
+): Promise<boolean> {
+
+    console.log(`INFO: Updating CLI Hints for Package ${pkgName}...`);
+
+    const managedPrefixDir = getManagedNpmPrefixDir(options.useGlobal);
+    const wasInstalled = isNpmPackageInstalledInPrefix(managedPrefixDir, pkgName);
+    if (!wasInstalled) {
+        const ok = await ensureNpmPackageInstalledInPrefix(pkgName, { prefixDir: managedPrefixDir, timeoutMs: options.timeoutMs });
+        if (!ok) {
+            return false;
+        }
+    }
+
+    const targetPath = getHintsPath(options.useGlobal);
+    const existing = loadHintsFile(targetPath);
+    const hasExisting = Boolean(existing[pkgName]?.hints?.length);
+    const existingDepth = existing[pkgName]?.meta?.helpDepth ?? 0;
+    const triePath = getHintsTriePath(options.useGlobal);
+    const trieExists = fs.existsSync(triePath);
+
+    // Only refresh when needed: first install, missing hints, or missing trie.
+    if (wasInstalled && hasExisting && trieExists && existingDepth >= 2) {
+        return true;
+    }
+
+    const hints = await generateHintsFromNpmPackage(pkgName, {
+        timeoutMs: options.timeoutMs,
+        npmPrefixDir: managedPrefixDir
+    });
+    if (!hints || hints.length === 0) {
+        return false;
+    }
+
+    const update: HintsConfig = {
+        [pkgName]: {
+            hints,
+            meta: {
+                helpDepth: 2,
+                updatedAt: new Date().toISOString()
+            }
+        }
+    };
+    // console.log(`INFO: New Hints Config ${update}`);
+
+    mergeHints(existing, update);
+    if (!existing[pkgName]) {
+        existing[pkgName] = { hints: [] };
+    }
+    existing[pkgName].meta = update[pkgName].meta;
+    writeHintsFile(targetPath, existing);
+    console.log(`INFO: Local Cli Hints updated to path ${targetPath}`);
+
+    const trieSource = loadCombinedHints(options.useGlobal);
+    writeHintsTrieFile(triePath, buildIdTrie(trieSource));
+
+    return true;
+}
+
 function writeHintsTrieFile(filePath: string, trie: TrieNode) {
     ensureDir(path.dirname(filePath));
     fs.writeFileSync(filePath, JSON.stringify(trieToPersisted(trie), null, 2), 'utf8');
@@ -1372,9 +2309,57 @@ function loadCombinedHints(useGlobal: boolean): HintsConfig {
 function buildIdTrie(hints: HintsConfig): TrieNode {
     const trie = createTrie();
     for (const id of Object.keys(hints)) {
-        insertTrie(trie, id, id);
+        for (let i = 0; i < id.length; i++) {
+            insertTrie(trie, id.substring(i), id);
+        }
     }
     return trie;
+}
+
+interface InvertedDoc {
+    id: string;
+    cli: string;
+    hint: string;
+}
+
+function buildInvertedIndex(hints: HintsConfig): Record<string, InvertedDoc[]> {
+    const index: Record<string, InvertedDoc[]> = {};
+    for (const [id, entry] of Object.entries(hints)) {
+        if (!entry.hints) continue;
+        for (const item of entry.hints) {
+            const doc: InvertedDoc = { id, cli: item.cli, hint: item.hint || '' };
+            const text = `${id} ${item.cli} ${item.hint || ''}`.toLowerCase();
+            const tokens = Array.from(new Set(text.split(/[^a-z0-9]+/)));
+            for (const token of tokens) {
+                if (!token) continue;
+                if (!index[token]) index[token] = [];
+                if (!index[token].some(d => d.id === doc.id && d.cli === doc.cli)) {
+                    index[token].push(doc);
+                }
+            }
+        }
+    }
+    return index;
+}
+
+function searchInvertedIndex(index: Record<string, InvertedDoc[]>, query: string): InvertedDoc[] {
+    const tokens = query.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    if (tokens.length === 0) return [];
+    
+    let results = new Map<string, InvertedDoc>();
+    for (const [key, docs] of Object.entries(index)) {
+        for (const token of tokens) {
+            if (key.includes(token)) {
+                for (const doc of docs) {
+                    const docKey = `${doc.id}::${doc.cli}`;
+                    if (!results.has(docKey)) {
+                        results.set(docKey, doc);
+                    }
+                }
+            }
+        }
+    }
+    return Array.from(results.values());
 }
 
 function buildCliTrie(hints: HintItem[]): TrieNode {
@@ -1393,9 +2378,21 @@ function filterCliHints(hints: HintItem[], query: string, limit: number): HintIt
     }
     const trimmed = query.trim().toLowerCase();
     if (trimmed) {
-        const scored = hints
-            .map((item) => ({ item, score: fuzzyScore(trimmed, item.cli) }))
-            .filter((entry) => entry.score > 0);
+        const queryTokens = Array.from(new Set(trimmed.split(/[^a-z0-9]+/))).filter(Boolean);
+        
+        const scored = hints.map((item) => {
+            const text = `${item.cli} ${item.hint || ''}`.toLowerCase();
+            let tokenMatches = 0;
+            for (const token of queryTokens) {
+                if (text.includes(token)) {
+                    tokenMatches += 1;
+                }
+            }
+            const fScore = fuzzyScore(trimmed, item.cli);
+            const score = tokenMatches * 10 + fScore;
+            return { item, score };
+        }).filter((entry) => entry.score > 0);
+        
         scored.sort((a, b) => b.score - a.score || a.item.cli.localeCompare(b.item.cli));
         return scored.slice(0, limit).map((entry) => entry.item);
     }
@@ -1529,17 +2526,48 @@ async function selectSkillId(
     }
     const activeTrie = trie || buildIdTrie(hints);
     const prefix = input || '';
-    let suggestions = searchTrie(activeTrie, prefix, limit);
-    if (suggestions.length === 0 && prefix) {
+    
+    let trieSuggestions = searchTrie(activeTrie, prefix, limit);
+    let hintMatches = new Set<string>();
+    let finalSuggestions: string[] = [];
+
+    if (prefix) {
+        const index = buildInvertedIndex(hints);
+        const docs = searchInvertedIndex(index, prefix);
+        
+        const scoredDocs = new Map<string, number>();
+        for (const doc of docs) {
+            scoredDocs.set(doc.id, (scoredDocs.get(doc.id) || 0) + 1);
+        }
+        
+        const sortedDocs = Array.from(scoredDocs.entries()).sort((a, b) => b[1] - a[1]);
+        
+        for (const [id] of sortedDocs) {
+            finalSuggestions.push(id);
+            hintMatches.add(id);
+        }
+    }
+    
+    for (const id of trieSuggestions) {
+        if (!finalSuggestions.includes(id)) {
+            finalSuggestions.push(id);
+        }
+    }
+    
+    if (finalSuggestions.length === 0 && prefix) {
         const scored = ids
             .map((id) => ({ id, score: fuzzyScore(prefix, id) }))
             .filter((entry) => entry.score > 0);
         scored.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
-        suggestions = scored.slice(0, limit).map((entry) => entry.id);
+        finalSuggestions = scored.slice(0, limit).map((entry) => entry.id);
     }
+    
+    let suggestions = finalSuggestions.slice(0, limit);
+    
     if (suggestions.length === 0) {
         return null;
     }
+    
     let printedLines = 0;
     const trackedLog = (message = '') => {
         console.log(message);
@@ -1549,7 +2577,8 @@ async function selectSkillId(
     trackedLog('');
     trackedLog('Skill ID suggestions:');
     suggestions.forEach((value, index) => {
-        trackedLog(`  ${index + 1}. ${highlightMatches(value, prefix)}`);
+        const hintBadge = hintMatches.has(value) ? ', \x1b[32m[hints]\x1b[0m' : '';
+        trackedLog(`  ${index + 1}. ${highlightMatches(value, prefix)}${hintBadge}`);
     });
     const selected = await promptSelection('Select skill id (number or id): ', suggestions);
     printedLines += 1; // prompt line
@@ -1678,12 +2707,36 @@ function countConsoleLogLines(message: string): number {
 }
 
 
+/**
+ If input json is single quoted already, don't double quote
+ '{"a":1}': unchanged
+ "{"a":1}": unchanged
+ {"a":1}: '{"a":1}'
+ */
+function safelyQuoteArgs(cmd: string): string {
+    return cmd.replace(/(['"])?({[^{}]*})(['"])?/g, (match, open, json, close) => {
+        // already quoted properly → keep as-is
+        if (open && close && open === close) {
+            return match;
+        }
+
+        // wrap ONLY the JSON part
+        return `'${json.replace(/'/g, `'\\''`)}'`;
+    });
+}
+
+
+/**
+ Usage: agtm run <unique_id> <cli>
+ */
 async function handleRun(
     idArg?: string,
     commandArgs: string[] = [],
-    options: { print?: boolean; dryRun?: boolean; mode?: string ; autoSetup?: boolean} = {}
+    options: { print?: boolean; dryRun?: boolean; mode?: string ; autoSetup?: boolean; uninstall?: boolean } = {}
 ) {
     const isAgent = (options.mode || 'human').toLowerCase() === MODE_AGENT;
+    const originalIdArg = idArg;
+
     // first load local hints
     // 1. Install Local and Global Cache
     let hints = loadCombinedHints(false);
@@ -1705,12 +2758,56 @@ async function handleRun(
         }
     }
 
+    if (options.uninstall) {
+        if (!idArg || !looksLikeNpmPackage(idArg)) {
+            console.error('\n❌ Error: --uninstall requires an npm package id like @angular/cli or dingtalk-workspace-cli.');
+            process.exit(1);
+        }
+        const prefixDir = getManagedNpmPrefixDir(false);
+        const ok = await uninstallNpmPackageFromPrefix(idArg, { prefixDir, timeoutMs: 60_000 });
+        if (!ok) {
+            console.error(`\n❌ Error: Failed to uninstall ${idArg} from ${prefixDir}`);
+            process.exit(1);
+        }
+        try {
+            fs.rmSync(getHintsPath(false), { force: true });
+            fs.rmSync(getHintsTriePath(false), { force: true });
+        } catch {
+            // ignore
+        }
+        console.log(`INFO: Uninstalled ${idArg} and cleared local hints cache under ${AGTM_LOCAL_DIR}`);
+        process.exit(0);
+    }
+
+    // If user passes an npm package name directly, try to generate and cache hints from its CLI help
+    // for both human and agent modes.
+    if (idArg && looksLikeNpmPackage(idArg)) {
+        const prefixDir = getManagedNpmPrefixDir(false);
+        const installed = isNpmPackageInstalledInPrefix(prefixDir, idArg);
+        const needsHints = !hasHints || !hints[idArg];
+        const cachedDepth = hints[idArg]?.meta?.helpDepth ?? 0;
+        const needsRefresh = installed && cachedDepth < 2;
+        const trieExists = fs.existsSync(getHintsTriePath(false));
+        if (needsHints || !installed || !trieExists || needsRefresh) {
+            const ok = await ensureNpmPackageHintsCached(idArg, { useGlobal: false, timeoutMs: 10_000 });
+            if (ok) {
+                hints = loadCombinedHints(false);
+                hasHints = Object.keys(hints).length > 0;
+            }
+        }
+    }
+
     if (isAgent) {
         if (!hasHints) {
             runtimeHints = await loadBundledHints();
         }
-        const activeHints = hasHints ? hints : (runtimeHints || {});
-        const cachedIdTrie = hasHints ? loadHintsTrieFile(getHintsTriePath(false)) : null;
+        let activeHints = hasHints ? hints : (runtimeHints || {});
+        let cachedIdTrie = hasHints ? loadHintsTrieFile(getHintsTriePath(false)) : null;
+        if (hasHints) {
+            activeHints = hints;
+            cachedIdTrie = loadHintsTrieFile(getHintsTriePath(false)) || buildIdTrie(activeHints);
+        }
+
         const ids = Object.keys(activeHints);
         if (ids.length === 0) {
             console.error('\n❌ Error: No hints available.');
@@ -1720,17 +2817,51 @@ async function handleRun(
         if (!idArg || !activeHints[idArg]) {
             const query = idArg || '';
             const trie = cachedIdTrie || buildIdTrie(activeHints);
-            let suggestions = searchTrie(trie, query, 2);
-            if (suggestions.length === 0 && query) {
+            
+            let trieSuggestions = searchTrie(trie, query, 5);
+            let hintMatches = new Set<string>();
+            let finalSuggestions: string[] = [];
+
+            if (query) {
+                const index = buildInvertedIndex(activeHints);
+                const docs = searchInvertedIndex(index, query);
+                
+                const scoredDocs = new Map<string, number>();
+                for (const doc of docs) {
+                    scoredDocs.set(doc.id, (scoredDocs.get(doc.id) || 0) + 1);
+                }
+                
+                const sortedDocs = Array.from(scoredDocs.entries()).sort((a, b) => b[1] - a[1]);
+                
+                for (const [id] of sortedDocs) {
+                    finalSuggestions.push(id);
+                    hintMatches.add(id);
+                }
+            }
+            
+            for (const id of trieSuggestions) {
+                if (!finalSuggestions.includes(id)) {
+                    finalSuggestions.push(id);
+                }
+            }
+            
+            if (finalSuggestions.length === 0 && query) {
                 const scored = ids
                     .map((id) => ({ id, score: fuzzyScore(query, id) }))
                     .filter((entry) => entry.score > 0);
                 scored.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
-                suggestions = scored.slice(0, 2).map((entry) => entry.id);
+                finalSuggestions = scored.slice(0, 5).map((entry) => entry.id);
             }
+            
+            let suggestions = finalSuggestions.slice(0, 5);
+
+            // In agent mode, if we have a very strong single match, we might want to use it.
+            // But for now, let's just print suggestions and exit as before, but with better ranking.
+            
             console.log('\nSkill ID suggestions:');
             suggestions.forEach((value, index) => {
-                console.log(`  ${index + 1}. ${highlightMatches(value, query)}`);
+                const hintBadge = hintMatches.has(value) ? ', \x1b[32m[hints]\x1b[0m' : '';
+                console.log(`  ${index + 1}. ${highlightMatches(value, query)}${hintBadge}`);
                 const entry = activeHints[value];
                 if (entry?.hints?.length) {
                     const preview = entry.hints.slice(0, 2).map((h) => `${h.cli}${h.hint ? ` # ${h.hint}` : ''}`);
@@ -1741,6 +2872,7 @@ async function handleRun(
         }
 
         let finalCommandArgs = commandArgs;
+        // Adjust idArg and finalCommandArgs if necessary
         if (finalCommandArgs.length > 0 && activeHints[finalCommandArgs[0]]) {
             idArg = finalCommandArgs[0];
             finalCommandArgs = finalCommandArgs.slice(1);
@@ -1752,7 +2884,10 @@ async function handleRun(
         const hintEntry = activeHints[idArg];
         if (!finalCommandArgs || finalCommandArgs.length === 0) {
             console.log('\nCommand hints:');
-            hintEntry?.hints?.slice(0, 5).forEach((item, index) => {
+            // USE originalIdArg to filter hints even in agent mode if no command specified
+            const searchQuery = (originalIdArg && originalIdArg !== idArg) ? originalIdArg : '';
+            const suggestions = filterCliHints(hintEntry.hints || [], searchQuery, Number.POSITIVE_INFINITY);
+            suggestions.forEach((item, index) => {
                 const hintText = item.hint ? ` # ${item.hint}` : '';
                 console.log(`  ${index + 1}. ${item.cli}${hintText}`);
             });
@@ -1778,7 +2913,11 @@ async function handleRun(
         if (options.print || options.dryRun) {
             return;
         }
-        const child = spawn(command, args, { stdio: 'inherit' });
+        const managedBinDir = path.join(getManagedNpmPrefixDir(false), 'bin');
+        const child = spawn(command, args, {
+            stdio: 'inherit',
+            env: { ...process.env, PATH: `${managedBinDir}${path.delimiter}${process.env.PATH || ''}` }
+        });
         child.on('error', (err: NodeJS.ErrnoException) => {
             if (err.code === 'ENOENT') {
                 console.error(`\n❌ Error: Command not found: ${command}`);
@@ -1844,7 +2983,8 @@ async function handleRun(
         if (!finalCommandArgs || finalCommandArgs.length === 0) {
             let chosen: HintItem | null = null;
             if (hintEntry?.hints && hintEntry.hints.length > 0) {
-                const query = await promptCommandLine(`\nEnter command to run (leave empty to list cli hints): `, ``);
+                const defaultQuery = (originalIdArg && originalIdArg !== idArg) ? originalIdArg : '';
+                const query = await promptCommandLine(`\nEnter command to run (leave empty to list cli hints): `, defaultQuery);
                 const searchQuery = query || '';
                 chosen = await selectCliHint(hintEntry.hints, searchQuery);
             }
@@ -1871,20 +3011,38 @@ async function handleRun(
             process.exit(1);
         }
 
-        const finalCommandLine = finalCommandArgs.join(' ');
+        let finalCommandLine = finalCommandArgs.join(' ');
         console.log("\nComplete the Cli with your arguments or leave blank and press Enter");
         const edited = await promptCommandLine(`\nFinal command line [${finalCommandLine}]:\n`, `${finalCommandLine}`);
+//         if (edited && edited.trim()) {
+//             finalCommandArgs = edited.split(/\s+/).filter(Boolean);
+//         }
+
+        // IMPORTANT: do NOT split anymore, keep the json in <cli> not split again agtm run <id> <cli>
         if (edited && edited.trim()) {
-            finalCommandArgs = edited.split(/\s+/).filter(Boolean);
+            finalCommandLine = edited.trim();
         }
 
+        // re-add quotes for JSON
+        finalCommandLine = safelyQuoteArgs(finalCommandLine);
+
         const [command, ...args] = finalCommandArgs;
-        const printable = `agtm run ${idArg} ${finalCommandArgs.join(' ')}`.trim();
+        const printable = `agtm run ${idArg} ${finalCommandLine}`.trim();
         console.log(`\u001b[32m${printable}\u001b[0m`);
         if (options.print || options.dryRun) {
             return;
         }
-        const child = spawn(command, args, { stdio: 'inherit' });
+
+        if (LOG_ENABLE) {
+            console.log(`finalCommandLine is ${finalCommandLine}`);
+        }
+        const managedBinDir = path.join(getManagedNpmPrefixDir(false), 'bin');
+        const child = spawn(finalCommandLine, {
+            stdio: 'inherit',
+            shell: true,
+            env: { ...process.env, PATH: `${managedBinDir}${path.delimiter}${process.env.PATH || ''}` }
+        });
+        // const child = spawn(command, args, { stdio: 'inherit' });
         child.on('error', (err: NodeJS.ErrnoException) => {
             if (err.code === 'ENOENT') {
                 console.error(`\n❌ Error: Command not found: ${command}`);
@@ -1906,7 +3064,9 @@ async function handleRun(
 const default_required_keys = ["name", "content"];
 const default_optional_keys = [
     "website", "field", "subfield", "content_tag_list", "github", "price_type", 
-    "api", "thumbnail_picture",  "upload_image_files", "sdk", "package"];
+    "api_list", "thumbnail_picture",  "upload_image_files", "sdk", "package",
+    "price_type", "price_per_call_credit", "publisher_id"
+    ];
 
 /**
  * Handles the 'agtm upload' command.
@@ -2006,7 +3166,13 @@ async function handleSearch(options: { q?: string, id?: number, countPerPage?: n
     if (q) searchParams.append('q', q);
     if (id) searchParams.append('id', id.toString());
     searchParams.append('count_per_page', (countPerPage || 10).toString());
-    searchParams.append('mode', defaultSearchMode);
+    var searchMode = "list";
+    if (id) {
+        searchMode = "list";
+    } else {
+        searchMode = "dict";
+    }
+    searchParams.append('mode', searchMode);
 
     const url = `${SEARCH_ENDPOINT}?${searchParams.toString()}`;
     console.log(`\nSearching marketplace at: ${url}`);
@@ -2091,6 +3257,12 @@ skillsCommand.command('add')
     .option('-g, --global', 'Install to global agent directories instead of project paths.')
     .action((source: string, options: Record<string, any>) => handleSkillsAdd({ ...options, source }));
 
+skillsCommand.command('build')
+    .description('Generate a local skill scaffold from an agent unique_id (owner/repo) using agent.yaml/json api_list or marketplace api_list.')
+    .argument('<unique_id>', 'Agent unique_id in format owner/repo (e.g. fdcnal/usda-fooddata-central-agent)')
+    .option('-f, --force', 'Overwrite existing generated skill directory if it already exists.')
+    .action((unique_id: string, options: { force?: boolean }) => handleSkillsBuild(unique_id, options));
+
 skillsCommand.command('list')
     .description('List installed skills for detected or specified agents, showing name, description, path, and folder.')
     .option('-a, --agent <agent>', 'Target specific agents (repeatable). Use "*" for all agents.', (value: string, prev: string[]) => {
@@ -2156,7 +3328,8 @@ program.command('run')
     .option('--print', 'Print the final command without executing.')
     .option('--dry-run', 'Alias for --print.')
     .option('--auto-setup', 'Automatically run setup if no cache found')
-    .action((id: string | undefined, command: string[], options: { print?: boolean; dryRun?: boolean; mode?: string; autoSetup ?: boolean }) =>
+    .option('--uninstall', 'Uninstall scoped npm package and clear local hints cache')
+    .action((id: string | undefined, command: string[], options: { print?: boolean; dryRun?: boolean; mode?: string; autoSetup ?: boolean; uninstall?: boolean }) =>
         handleRun(id, command, options)
     );
 

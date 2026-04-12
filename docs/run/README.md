@@ -11,11 +11,10 @@ Let's say you want to run an agent command of Playwright to go to a URL and fetc
 ```
 agtm run <provider_unique_id> <agent_cli>
 ```
-
 ### Example 
 
 ```shell
-rockingdingo@rockingdingodeMacBook-Pro skills_cli % agtm run play
+agtm run play
 DEBUG: Entering Human Mode | idArg play | commandArgs  | options [object Object] | hasHints true | hints [object Object]
 
 Skill ID suggestions:
@@ -43,6 +42,5 @@ Support CLI List, Please welcome to contrib
 | paul-gauthier/aider | aider --model [model_name], /test [command]
 | openinterpreter/open-interpreter | interpreter, interpreter --os
 | google-gemini/gemini-cli | gemini, gemini -p "[prompt] @[file/dir]", gemini --yolo, /memory add "[fact]", /mcp list, /restore
-
 
 

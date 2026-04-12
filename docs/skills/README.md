@@ -58,6 +58,28 @@ codex  code_fail_skills             .agents/skills/code_fail_skills             
 codex  code_success_skills          .agents/skills/code_success_skills          0.88  L4   
 ```
 
+### skills build
+
+Convert registered API to skills under local folder
+
+#### Example
+```
+agtm skills build <unique_id>
+## build skills for food calories app
+agtm skills build fdcnal/usda-fooddata-central-agent
+# or 
+agtm skills build aiagenta2z/financeagent
+```
+
+Generates Skills Format:
+```
+skills/fdcnal-usda-fooddata-central-agent/
+  ├── SKILL.md
+  ├── scripts/
+  └── reference/
+```
+
+
 ### skills log
 
 #### Usage

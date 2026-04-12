@@ -1,21 +1,261 @@
 {
   "microsoft/playwright-cli": {
     "hints": [
-      {
-        "cli": "playwright-cli open [url]",
-        "hint": "open browser, optionally navigate to url"
-      },
-      {
-        "cli": "playwright-cli goto <url> ",
-        "hint": "navigate to a url"
-      }
+      { "cli": "playwright-cli open [url]", "hint": "open browser, optionally navigate to url" },
+      { "cli": "playwright-cli goto <url>", "hint": "navigate to a url" },
+      { "cli": "playwright-cli close", "hint": "close the browser page" },
+      { "cli": "playwright-cli type <text>", "hint": "type text into editable element" },
+      { "cli": "playwright-cli click <ref> [button]", "hint": "click an element" },
+      { "cli": "playwright-cli dblclick <ref> [button]", "hint": "double click an element" },
+      { "cli": "playwright-cli fill <ref> <text>", "hint": "fill text into input field" },
+      { "cli": "playwright-cli drag <startRef> <endRef>", "hint": "drag and drop between elements" },
+      { "cli": "playwright-cli hover <ref>", "hint": "hover over element" },
+      { "cli": "playwright-cli select <ref> <val>", "hint": "select dropdown option" },
+      { "cli": "playwright-cli upload <file>", "hint": "upload file(s)" },
+      { "cli": "playwright-cli check <ref>", "hint": "check checkbox or radio" },
+      { "cli": "playwright-cli uncheck <ref>", "hint": "uncheck checkbox or radio" },
+      { "cli": "playwright-cli snapshot", "hint": "capture page snapshot" },
+      { "cli": "playwright-cli snapshot --filename=<file>", "hint": "save snapshot to file" },
+      { "cli": "playwright-cli eval <func> [ref]", "hint": "run JS on page or element" },
+      { "cli": "playwright-cli dialog-accept [prompt]", "hint": "accept dialog" },
+      { "cli": "playwright-cli dialog-dismiss", "hint": "dismiss dialog" },
+      { "cli": "playwright-cli resize <w> <h>", "hint": "resize browser window" },
+      { "cli": "playwright-cli go-back", "hint": "go to previous page" },
+      { "cli": "playwright-cli go-forward", "hint": "go to next page" },
+      { "cli": "playwright-cli reload", "hint": "reload current page" },
+      { "cli": "playwright-cli press <key>", "hint": "press a key" },
+      { "cli": "playwright-cli keydown <key>", "hint": "key down event" },
+      { "cli": "playwright-cli keyup <key>", "hint": "key up event" },
+      { "cli": "playwright-cli mousemove <x> <y>", "hint": "move mouse" },
+      { "cli": "playwright-cli mousedown [button]", "hint": "mouse button down" },
+      { "cli": "playwright-cli mouseup [button]", "hint": "mouse button up" },
+      { "cli": "playwright-cli mousewheel <dx> <dy>", "hint": "scroll mouse wheel" },
+      { "cli": "playwright-cli screenshot [ref]", "hint": "take screenshot" },
+      { "cli": "playwright-cli screenshot --filename=<file>", "hint": "save screenshot to file" },
+      { "cli": "playwright-cli pdf", "hint": "save page as pdf" },
+      { "cli": "playwright-cli pdf --filename=<file>", "hint": "save pdf to file" },
+      { "cli": "playwright-cli tab-list", "hint": "list browser tabs" },
+      { "cli": "playwright-cli tab-new [url]", "hint": "open new tab" },
+      { "cli": "playwright-cli tab-close [index]", "hint": "close tab" },
+      { "cli": "playwright-cli tab-select <index>", "hint": "switch tab" },
+      { "cli": "playwright-cli state-save [filename]", "hint": "save storage state" },
+      { "cli": "playwright-cli state-load <filename>", "hint": "load storage state" },
+      { "cli": "playwright-cli cookie-list [--domain]", "hint": "list cookies" },
+      { "cli": "playwright-cli cookie-get <name>", "hint": "get cookie value" },
+      { "cli": "playwright-cli cookie-set <name> <value>", "hint": "set cookie" },
+      { "cli": "playwright-cli cookie-delete <name>", "hint": "delete cookie" },
+      { "cli": "playwright-cli cookie-clear", "hint": "clear all cookies" },
+      { "cli": "playwright-cli localstorage-list", "hint": "list localStorage" },
+      { "cli": "playwright-cli localstorage-get <key>", "hint": "get localStorage value" },
+      { "cli": "playwright-cli localstorage-set <key> <value>", "hint": "set localStorage" },
+      { "cli": "playwright-cli localstorage-delete <key>", "hint": "delete localStorage entry" },
+      { "cli": "playwright-cli localstorage-clear", "hint": "clear localStorage" },
+      { "cli": "playwright-cli sessionstorage-list", "hint": "list sessionStorage" },
+      { "cli": "playwright-cli sessionstorage-get <key>", "hint": "get sessionStorage value" },
+      { "cli": "playwright-cli sessionstorage-set <key> <value>", "hint": "set sessionStorage" },
+      { "cli": "playwright-cli sessionstorage-delete <key>", "hint": "delete sessionStorage entry" },
+      { "cli": "playwright-cli sessionstorage-clear", "hint": "clear sessionStorage" },
+      { "cli": "playwright-cli route <pattern> [opts]", "hint": "mock network requests" },
+      { "cli": "playwright-cli route-list", "hint": "list routes" },
+      { "cli": "playwright-cli unroute [pattern]", "hint": "remove routes" },
+      { "cli": "playwright-cli console [min-level]", "hint": "show console logs" },
+      { "cli": "playwright-cli network", "hint": "list network requests" },
+      { "cli": "playwright-cli run-code <code>", "hint": "execute playwright code" },
+      { "cli": "playwright-cli tracing-start", "hint": "start tracing" },
+      { "cli": "playwright-cli tracing-stop", "hint": "stop tracing" },
+      { "cli": "playwright-cli video-start", "hint": "start video recording" },
+      { "cli": "playwright-cli video-stop [filename]", "hint": "stop video recording" },
+      { "cli": "playwright-cli open --browser=<name>", "hint": "open with specific browser" },
+      { "cli": "playwright-cli open --extension", "hint": "connect via extension" },
+      { "cli": "playwright-cli open --persistent", "hint": "use persistent profile" },
+      { "cli": "playwright-cli open --profile=<path>", "hint": "use custom profile" },
+      { "cli": "playwright-cli open --config=<file>", "hint": "use config file" },
+      { "cli": "playwright-cli delete-data", "hint": "delete browser data" },
+      { "cli": "playwright-cli -s=<name> <cmd>", "hint": "run command in named session" },
+      { "cli": "playwright-cli -s=<name> close", "hint": "close named session" },
+      { "cli": "playwright-cli -s=<name> delete-data", "hint": "delete session data" },
+      { "cli": "playwright-cli list", "hint": "list all sessions" },
+      { "cli": "playwright-cli close-all", "hint": "close all browsers" },
+      { "cli": "playwright-cli kill-all", "hint": "force kill all browsers" }
     ]
   },
   "googleworkspace/cli": {
     "hints": [
       {
-        "cli": "gws drive files list --params",
-        "hint": "List the 10 most recent files"
+        "cli": "gws auth setup",
+        "hint": "initialize Google Cloud project and OAuth"
+      },
+      {
+        "cli": "gws auth login",
+        "hint": "login with OAuth credentials"
+      },
+      {
+        "cli": "gws auth login --scopes <services>",
+        "hint": "login with specific scopes"
+      },
+      {
+        "cli": "gws auth export --unmasked",
+        "hint": "export credentials for CI or headless usage"
+      },
+      {
+        "cli": "gws <service> <resource> <method> --params '<json>'",
+        "hint": "call any Google Workspace API method"
+      },
+      {
+        "cli": "gws <service> <resource> <method> --json '<json>'",
+        "hint": "send JSON body payload"
+      },
+      {
+        "cli": "gws schema <service.resource.method>",
+        "hint": "inspect API request/response schema"
+      },
+      {
+        "cli": "gws drive files list --params '{\"pageSize\": 10}'",
+        "hint": "list recent Drive files"
+      },
+      {
+        "cli": "gws drive files list --params '{\"pageSize\": 100}' --page-all",
+        "hint": "stream paginated results as NDJSON"
+      },
+      {
+        "cli": "gws drive files create --json '{\"name\": \"file\"}' --upload <file>",
+        "hint": "upload file to Drive"
+      },
+      {
+        "cli": "gws sheets spreadsheets create --json '{\"properties\": {\"title\": \"Sheet\"}}'",
+        "hint": "create a spreadsheet"
+      },
+      {
+        "cli": "gws sheets spreadsheets values get --params '<json>'",
+        "hint": "read spreadsheet values"
+      },
+      {
+        "cli": "gws sheets spreadsheets values append --params '<json>' --json '<json>'",
+        "hint": "append rows to spreadsheet"
+      },
+      {
+        "cli": "gws gmail users messages list --params '<json>'",
+        "hint": "list Gmail messages"
+      },
+      {
+        "cli": "gws gmail users messages get --params '<json>'",
+        "hint": "get email content"
+      },
+      {
+        "cli": "gws chat spaces messages create --params '<json>' --json '<json>'",
+        "hint": "send Chat message"
+      },
+      {
+        "cli": "gws calendar events list --params '<json>'",
+        "hint": "list calendar events"
+      },
+      {
+        "cli": "gws calendar events insert --json '<json>'",
+        "hint": "create calendar event"
+      },
+      {
+        "cli": "gws docs documents get --params '<json>'",
+        "hint": "read a document"
+      },
+      {
+        "cli": "gws <service> --help",
+        "hint": "show all commands and helper methods for a service"
+      },
+      {
+        "cli": "gws gmail +send --to <email> --subject <text> --body <text>",
+        "hint": "send an email"
+      },
+      {
+        "cli": "gws gmail +reply --message-id <id> --body <text>",
+        "hint": "reply to an email"
+      },
+      {
+        "cli": "gws gmail +triage",
+        "hint": "show unread inbox summary"
+      },
+      {
+        "cli": "gws gmail +watch",
+        "hint": "stream new emails as NDJSON"
+      },
+      {
+        "cli": "gws sheets +append --spreadsheet <id> --values <csv>",
+        "hint": "append row to spreadsheet"
+      },
+      {
+        "cli": "gws sheets +read --spreadsheet <id>",
+        "hint": "read spreadsheet values"
+      },
+      {
+        "cli": "gws docs +write --document <id> --text <text>",
+        "hint": "append text to document"
+      },
+      {
+        "cli": "gws drive +upload <file> --name <name>",
+        "hint": "upload file with metadata"
+      },
+      {
+        "cli": "gws calendar +insert",
+        "hint": "create calendar event quickly"
+      },
+      {
+        "cli": "gws calendar +agenda",
+        "hint": "show upcoming events"
+      },
+      {
+        "cli": "gws calendar +agenda --timezone <tz>",
+        "hint": "show agenda in specific timezone"
+      },
+      {
+        "cli": "gws workflow +standup-report",
+        "hint": "generate daily standup summary"
+      },
+      {
+        "cli": "gws workflow +meeting-prep",
+        "hint": "prepare for upcoming meeting"
+      },
+      {
+        "cli": "gws workflow +weekly-digest",
+        "hint": "weekly summary of meetings and emails"
+      },
+      {
+        "cli": "gws workflow +email-to-task",
+        "hint": "convert email into task"
+      },
+      {
+        "cli": "gws chat +send --space <id> --text <message>",
+        "hint": "send chat message"
+      },
+      {
+        "cli": "gws events +subscribe",
+        "hint": "subscribe to workspace events"
+      },
+      {
+        "cli": "gws events +renew",
+        "hint": "renew event subscription"
+      },
+      {
+        "cli": "gws modelarmor +sanitize-prompt",
+        "hint": "sanitize user prompt"
+      },
+      {
+        "cli": "gws modelarmor +sanitize-response",
+        "hint": "sanitize model response"
+      },
+      {
+        "cli": "gws <service> <resource> <method> --dry-run",
+        "hint": "preview API request without executing"
+      },
+      {
+        "cli": "gws <service> <resource> <method> --page-all",
+        "hint": "auto paginate results"
+      },
+      {
+        "cli": "gws <service> <resource> <method> --page-limit <n>",
+        "hint": "limit number of pages"
+      },
+      {
+        "cli": "gws <service> <resource> <method> --sanitize <template>",
+        "hint": "sanitize API response using Model Armor"
       }
     ]
   },
@@ -36,10 +276,514 @@
       {
         "cli": "onekey llm --payload <json|@file>",
         "hint": "Run a raw LLM request using a pre-formatted JSON payload or configuration file"
+      },
+      {
+        "cli": "onekey agent bing-image-search-mcp/bing-image-search-mcp search_images '{\"query\": \"Eiffel Tower sunset\", \"limit\": 5}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent bing-image-search-mcp/bing-image-search-mcp search_images_batch '{\"query_list\": [\"Eiffel Tower sunset\", \"Louvre at night\"], \"limit\": 3}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent baidu-maps-sse/baidu-maps-sse maps_geocode '{\"address\": \"Times Square, New York\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent baidu-maps-sse/baidu-maps-sse maps_reverse_geocode '{\"latitude\": 40.758, \"longitude\": -73.9855}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent baidu-maps-sse/baidu-maps-sse maps_search_places '{\"query\": \"Italian restaurants\", \"location\": {\"latitude\": 40.758, \"longitude\": -73.9855}, \"radius\": 500}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent baidu-maps-sse/baidu-maps-sse maps_place_details '{\"place_id\": \"ChIJmQJIxlVYwokRLgeuocVOGVU\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent baidu-maps-sse/baidu-maps-sse maps_distance_matrix '{\"origins\": [\"Times Square, NY\"], \"destinations\": [\"Central Park, NY\"], \"mode\": \"driving\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent baidu-maps-sse/baidu-maps-sse maps_elevation '{\"locations\": [{\"latitude\": 36.057944, \"longitude\": -112.125168}]}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent baidu-maps-sse/baidu-maps-sse maps_directions '{\"origin\": \"Golden Gate Bridge\", \"destination\": \"Ferry Building San Francisco\", \"mode\": \"driving\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent brave-search/brave-search brave_web_search '{\"query\": \"latest AI research 2026\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent brave-search/brave-search brave_local_search '{\"query\": \"coffee near Times Square\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent google-search/google-search google_search '{\"query\": \"US inflation rate February 2026\", \"num\": 5, \"start\": 0}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_area_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_bar_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_boxplot_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_column_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_district_map '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_dual_axes_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_fishbone_diagram '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_flow_diagram '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_funnel_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_histogram_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_line_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_liquid_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_mind_map '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_network_graph '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_organization_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_path_map '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_pie_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_pin_map '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_radar_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_sankey_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_scatter_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_treemap_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_venn_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_violin_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_waterfall_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_word_cloud_chart '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent mcp-server-chart/mcp-server-chart generate_spreadsheet '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent tavily-remote-mcp/tavily-remote-mcp tavily_search '{\"query\": \"NVIDIA earnings\", \"max_results\": 5, \"search_depth\": \"advanced\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent tavily-remote-mcp/tavily-remote-mcp tavily_extract '{\"urls\": [\"https://example.com/article\"], \"extract_depth\": \"advanced\", \"format\": \"markdown\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent tavily-remote-mcp/tavily-remote-mcp tavily_crawl '{\"url\": \"https://example.com\", \"max_depth\": 1, \"max_breadth\": 10, \"limit\": 20}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent tavily-remote-mcp/tavily-remote-mcp tavily_map '{\"url\": \"https://example.com/docs\", \"max_depth\": 1, \"max_breadth\": 10, \"limit\": 30}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent tavily-remote-mcp/tavily-remote-mcp tavily_research '{\"input\": \"Impact of AI on healthcare\", \"model\": \"pro\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent google-maps/google-maps maps_geocode '{\"address\": \"Times Square, New York\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent google-maps/google-maps maps_reverse_geocode '{\"latitude\": 40.758, \"longitude\": -73.9855}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent google-maps/google-maps maps_search_places '{\"query\": \"Italian restaurants\", \"location\": {\"latitude\": 40.758, \"longitude\": -73.9855}, \"radius\": 500}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent google-maps/google-maps maps_place_details '{\"place_id\": \"ChIJmQJIxlVYwokRLgeuocVOGVU\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent google-maps/google-maps maps_distance_matrix '{\"origins\": [\"Times Square, NY\"], \"destinations\": [\"Central Park, NY\"], \"mode\": \"driving\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent google-maps/google-maps maps_elevation '{\"locations\": [{\"latitude\": 36.057944, \"longitude\": -112.125168}]}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent google-maps/google-maps maps_directions '{\"origin\": \"Golden Gate Bridge\", \"destination\": \"Ferry Building San Francisco\", \"mode\": \"driving\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent firecrawl-mcp/firecrawl-mcp firecrawl_scrape '{\"url\": \"https://example.com/api-docs\", \"formats\": [\"json\"], \"onlyMainContent\": true}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent firecrawl-mcp/firecrawl-mcp firecrawl_map '{\"query\": \"webhook\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent firecrawl-mcp/firecrawl-mcp firecrawl_search '{\"query\": \"product pricing site:example.com\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent firecrawl-mcp/firecrawl-mcp firecrawl_crawl '{\"url\": \"https://example.com\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent firecrawl-mcp/firecrawl-mcp firecrawl_check_crawl_status '{\"crawl_id\": \"crawl-123\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent firecrawl-mcp/firecrawl-mcp firecrawl_extract '{\"url\": \"https://example.com\", \"selector\": \"h1\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent firecrawl-mcp/firecrawl-mcp firecrawl_agent '{\"task\": \"find pricing\", \"url\": \"https://example.com\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent firecrawl-mcp/firecrawl-mcp firecrawl_agent_status '{\"job_id\": \"job-123\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent firecrawl-mcp/firecrawl-mcp firecrawl_browser_create '{\"profile\": \"default\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent firecrawl-mcp/firecrawl-mcp firecrawl_browser_execute '{\"browser_id\": \"browser-1\", \"script\": \"document.title\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent firecrawl-mcp/firecrawl-mcp firecrawl_browser_delete '{\"browser_id\": \"browser-1\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent firecrawl-mcp/firecrawl-mcp firecrawl_browser_list '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent perplexity/perplexity perplexity_ask '{\"question\": \"Who won the 2024 World Series?\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent perplexity/perplexity perplexity_research '{\"query\": \"renewable energy policies US\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent perplexity/perplexity perplexity_reason '{\"topic\": \"impact of quantum computing\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent perplexity/perplexity perplexity_search '{\"query\": \"best VR headsets 2026\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github add_comment_to_pending_review '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github add_issue_comment '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github create_branch '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github create_or_update_file '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github create_pull_request '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github create_repository '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github delete_file '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github fork_repository '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github get_commit '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github get_file_contents '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github get_label '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github get_latest_release '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github get_me '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github get_release_by_tag '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github get_tag '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github get_team_members '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github get_teams '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github issue_read '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github issue_write '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github list_branches '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github list_commits '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github list_issue_types '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github list_issues '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github list_pull_requests '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github list_releases '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github list_tags '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github merge_pull_request '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github pull_request_read '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github pull_request_review_write '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github push_files '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github request_copilot_review '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github search_code '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github search_issues '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github search_pull_requests '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github search_repositories '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github search_users '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github sub_issue_write '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github update_pull_request '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent github/github update_pull_request_branch '{}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent gemini-nano-banana/gemini-nano-banana generate_image_gemini '{\"model\": \"gemini-2.5-flash-image\", \"prompt\": \"sunrise over mountains\", \"aspect_ratio\": \"16:9\", \"image_size\": \"1K\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent gemini-nano-banana/gemini-nano-banana generate_image_nano_banana '{\"model\": \"gemini-2.5-flash-image\", \"prompt\": \"robot reading book\", \"aspect_ratio\": \"16:9\", \"image_size\": \"1K\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent gemini-nano-banana/gemini-nano-banana generate_image_nano_banana_with_reference '{\"model\": \"gemini-3-pro-image-preview\", \"prompt\": \"winter coat style\", \"images\": [\"https://avatars.githubusercontent.com/u/242328252\"], \"aspect_ratio\": \"1:1\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent gemini-nano-banana/gemini-nano-banana ocr_extract_text_from_image '{\"images\": [\"https://avatars.githubusercontent.com/u/242328252\"], \"model\": \"gemini-3-flash-preview\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent gemini-nano-banana/gemini-nano-banana list_items_from_image '{\"images\": [\"https://avatars.githubusercontent.com/u/242328252\"], \"model\": \"gemini-3-flash-preview\", \"output_json\": true}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_direction_bicycling '{\"origin\": \"116.481028,39.989643\", \"destination\": \"116.465302,40.004717\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_direction_driving '{\"origin\": \"116.481028,39.989643\", \"destination\": \"116.465302,40.004717\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_direction_transit_integrated '{\"origin\": \"116.481028,39.989643\", \"destination\": \"116.465302,40.004717\", \"city\": \"北京\", \"cityd\": \"上海\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_direction_walking '{\"origin\": \"116.481028,39.989643\", \"destination\": \"116.465302,40.004717\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_distance '{\"origins\": \"116.481028,39.989643|116.465302,40.004717\", \"destination\": \"116.481028,39.989643\", \"type\": \"1\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_geo '{\"address\": \"Beijing Capital Airport\", \"city\": \"北京\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_regeocode '{\"location\": \"116.481488,39.990464\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_ip_location '{\"ip\": \"8.8.8.8\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_schema_personal_map '{\"orgName\": \"Weekend Trip\", \"lineList\": [{\"title\": \"Day1\", \"pointInfoList\": [{\"name\": \"Tiananmen\", \"lon\": 116.3975, \"lat\": 39.9087, \"poiId\": \"B000A8UIN8\"}]}]}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_around_search '{\"keywords\": \"coffee\", \"location\": \"116.481488,39.990464\", \"radius\": \"2000\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_search_detail '{\"id\": \"B0FFFABCD1\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_text_search '{\"keywords\": \"Tsinghua University\", \"city\": \"北京\", \"citylimit\": true}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_schema_navi '{\"lon\": \"116.3975\", \"lat\": \"39.9087\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_schema_take_taxi '{\"slon\": \"116.3975\", \"slat\": \"39.9087\", \"sname\": \"Tiananmen\", \"dlon\": \"116.481028\", \"dlat\": \"39.989643\", \"dname\": \"Sanlitun\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
+      },
+      {
+        "cli": "onekey agent amap-maps-streamableHTTP/amap-maps-streamableHTTP maps_weather '{\"city\": \"北京\"}'",
+        "hint": "Invoke a specific agent by ID with structured JSON data or a file input"
       }
     ]
   },
-"openai/codex-cli": {
+  "openai/codex-cli": {
     "hints": [
       {
         "cli": "codex",

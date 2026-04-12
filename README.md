@@ -8,9 +8,15 @@
 ## Features
 
 **agtm skills**: Manage Skills, Add Skills, List Skills, Log Skills Performance, Skills performance Evaluator, compare to realworld benchmarks   
-**agtm upload**: AI Agent Registry, register local agent meta information of json or yaml format(agent.json/agent.yaml) or sync your github source meta including README.md     
+**agtm upload**: AI Agent Registry,Agent Meta,APIs to Skills/MCPs/CLIs,register local agent meta information of json or yaml format(agent.json/agent.yaml) or sync your github source meta including README.md     
 **agtm search**: Search the open source AI Agent Marketplace, including github community, huggingface community, product hunt community, deepnlp ai agent marketplace index, etc     
 **agtm run**: Run agent clis, don't need to remember, with the powerful hints and completion ability, just type a few characters and "--hint" will help you complete the command line.   
+
+
+### Live Update
+**20260407**: Agtm Hints now works with any npm-registered package, automatically converting CLI help output into structured, highlighted hints—e.g., for example @larksuite/cli, you 
+can quickly find "message" related clis using "agtm run @larksuite/cli message" and it will guide you to the clis, such as "lark-cli im messages-reply"
+
 
 The agent cli run hint from "play" to "playwright" complete cli.
 
@@ -34,17 +40,55 @@ code_fail_skills  4          0.9     L3(100%)
 npm install -g @aiagenta2z/agtm
 ```
 
+### Run a playwright Webpage cli
 Setup hint and skills benchmark 
 ```shell
 npx agtm setup --levels  ## Needed before `agtm rate`, to sync the benchmarks json to local folder 
 npx agtm setup --hint    ## Needed before `agtm run` 
 ```
 
-Agtm CLI Options
+```shell
+npm install -g @playwright/cli@latest
+agtm run play
+### hint to "playwright-cli goto" command line
+```
+
+Result Hint
+```shell
+Selected Skill/Cli is microsoft/playwright-cli
+
+Enter command to run (leave empty to list cli hints): play
+
+Complete the Cli with your arguments or leave blank and press Enter
+
+Final command line [playwright-cli goto <url>]:
+playwright-cli goto https://www.google.com
+agtm run microsoft/playwright-cli playwright-cli goto https://www.google.com
+
+### Browser `default` opened with pid 4603.
+- default:
+  - browser-type: chrome
+  - user-data-dir: <in-memory>
+  - headed: false
+---
+
+### Ran Playwright code
+await page.goto('https://www.google.com');
+
+
+### Page
+- Page URL: https://www.google.com/
+- Page Title: Google
+### Snapshot
+- [Snapshot](.playwright-cli/page-2026-03-22T03-08-05-614Z.yml)
+```
+
+
+## Agtm CLI Options
 
 | CLI         | Command and Options                       | Document                       |
 |-------------|-------------------------------------------|--------------------------------|
-| agtm skills | add, list, log, rate                      | [Doc](./docs/skills/README.md)  |
+| agtm skills | add, list, build, log, rate               | [Doc](./docs/skills/README.md)  |
 | agtm search | --q query                                 | [Doc](./docs/registry/README.md) |
 | agtm upload | --github  --config to local agent meta    | [Doc](./docs/registry/README.md) |
 | agtm run    | --hint agent-cli hint and auto completion | [Doc](./docs/run/README.md)     |
@@ -90,6 +134,21 @@ npx agtm skills list --agent codex
 npx agtm skills list --agent claude-code --global
 ```
 
+
+### skills build
+Convert registered Agentic API to skills easily. Before running the build command, make sure 
+the unique_id agent and API meta infos are registered in AI Agent Marketplace using agtm upload.
+
+#### Usage Example
+```
+agtm skills build <unique_id>
+
+# build skills for food calories app
+agtm skills build fdcnal/usda-fooddata-central-agent
+# or 
+agtm skills build aiagenta2z/financeagent
+
+```
 
 ### skills log
 
@@ -184,7 +243,6 @@ The `run` command executes agent workflows with interactive hints and fuzzy CLI 
 Let's say you want to run an agent command of Playwright to go to a URL and fetch a webpage. You don't need to remember the full command—type `play`, pick the provider, then pick the CLI action.
 
 
-
 ### Usage
 
 Remember to setup hint before running the agent-cli
@@ -197,7 +255,7 @@ agtm setup --hint
 agtm run <provider_unique_id> <agent_cli>
 ```
 
-### Example 
+### Cli Examples
 
 ```shell
 agtm run play
@@ -227,6 +285,31 @@ Support CLI List, Please welcome to contrib
 | openinterpreter/open-interpreter | interpreter, interpreter --os
 | google-gemini/gemini-cli | gemini, gemini -p "[prompt] @[file/dir]", gemini --yolo, /memory add "[fact]", /mcp list, /restore
 
+#### npmjs registered packages
+
+Agtm Hints now works with any npm-registered package, automatically converting CLI help output into structured, highlighted hints—e.g., for example @larksuite/cli.
+
+```shell
+## hints on all the commands of the package
+agtm run @larksuite/cli
+
+## Search all the message related clis 
+agtm run @larksuite/cli message  
+```
+
+Result
+```shell
+npx agtm run @larksuite/cli message 
+
+INFO: Updating CLI Hints for Package @larksuite/cli...
+
+Command hints:
+  1. lark-cli im messages-resources-download Download images/files from a message; user/bot; downloads image/file resources by message-id and file-key to a safe relative output path
+  2. lark-cli mail user_mailbox.message.attachments user_mailbox.message.attachments operations
+  3. lark-cli im messages-search # Search messages across chats (supports keyword, sender, time range filters) with user identity; user-only; filters by chat/sender/attachment/time, enriches results via mget and chats batch_query
+  4. lark-cli im messages-reply # Reply to a message (supports thread replies) with bot identity; bot-only; supports text/markdown/post/media replies, reply-in-thread, idempotency key
+  5. lark-cli im messages-mget # Batch get messages by IDs; user/bot; fetches up to 50 om_ message IDs, formats sender names, expands thread replies
+```
 
 ## AI Agent Registry
 ### `search`
@@ -294,6 +377,4 @@ You are welcome to contrib your cli list to the agent cli hints json file to fol
 #### Skill Run Benchmark 
 
 You are welcome to contrib your own customized benchmarks of skills and unique levels system in folder [levels](data/config/levels). 
-
-
 
